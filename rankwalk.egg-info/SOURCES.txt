@@ -7,4 +7,7 @@ rankwalk.egg-info/PKG-INFO
 rankwalk.egg-info/SOURCES.txt
 rankwalk.egg-info/dependency_links.txt
 rankwalk.egg-info/top_level.txt
+rankwalk/tests/experiment.py
+rankwalk/tests/experiment_LFR.py
+rankwalk/tests/experiment_cora.py
 rankwalk/tests/test_rankwalk.py
