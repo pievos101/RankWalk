@@ -36,7 +36,7 @@ G.add_edges_from(edge_index.T)
 # -----------------------------
 in_channels = n_features
 out_channels = 64
-walk_length = 10
+walk_length = 20
 
 conv = RankWalkConv(in_channels, out_channels, walk_length=walk_length)
 embeddings = conv(X, torch.tensor(edge_index, dtype=torch.long))
