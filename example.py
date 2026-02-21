@@ -64,7 +64,7 @@ def run_node2vec(G, dim=48):
     node2vec = Node2Vec(
         G,
         dimensions=dim,
-        walk_length=30,
+        walk_length=20,
         num_walks=100,
         p=1,
         q=1,
