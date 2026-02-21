@@ -19,11 +19,11 @@ edge_index = to_undirected(data.edge_index)
 labels = data.y
 num_nodes = x.size(0)
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 x, edge_index, labels = x.to(device), edge_index.to(device), labels.to(device)
 
 # --------------------------
-# GNN Model
+# GNN
 # --------------------------
 class GNN(nn.Module):
     def __init__(self, in_dim, hidden_dim=48):
@@ -32,14 +32,14 @@ class GNN(nn.Module):
         self.conv2 = GraphConv(hidden_dim, hidden_dim)
 
     def forward(self, x, edge_index):
-        h1 = F.relu(self.conv1(x, edge_index))
-        h2 = self.conv2(h1, edge_index)
-        return F.normalize(h2, dim=1)
+        h = F.relu(self.conv1(x, edge_index))
+        h = self.conv2(h, edge_index)
+        return F.normalize(h, dim=1)
 
-model = GNN(x.size(1), hidden_dim=48).to(device)
+model = GNN(x.size(1)).to(device)
 
 # --------------------------
-# Jaccard Similarity
+# Jaccard similarity
 # --------------------------
 def jaccard_similarity(edge_index, num_nodes):
     neighbors = [[] for _ in range(num_nodes)]
@@ -60,110 +60,73 @@ def jaccard_similarity(edge_index, num_nodes):
 J = jaccard_similarity(edge_index, num_nodes)
 
 # --------------------------
-# Borda-aggregated first-visit rankings
+# Epoch-wise best positive per node
 # --------------------------
-def borda_topk_pairs(
-    J,
-    edge_index,
-    walk_length=5,
-    num_walks=20,
-    top_k=5,
-    eps=1e-6
-):
+def sample_best_positive(J, edge_index, walk_length=10, num_walks=20):
     neighbors = [[] for _ in range(num_nodes)]
     for u, v in edge_index.t().tolist():
         neighbors[u].append(v)
 
-    pos_pairs = []
+    pos = {}
 
     for start in range(num_nodes):
-        rank_sum = defaultdict(float)
-        visit_count = defaultdict(int)
+        score = defaultdict(float)
 
         for _ in range(num_walks):
-            visited = {}
             cur = start
-            visited[cur] = 1  # rank starts at 1
-
-            for step in range(1, walk_length + 1):
-                nbrs = neighbors[cur]
-                if not nbrs:
+            for _ in range(walk_length):
+                if not neighbors[cur]:
                     break
                 probs = torch.tensor(
-                    [J[start, n].item() + eps for n in nbrs],
+                    [J[start, n].item() + 1e-6 for n in neighbors[cur]],
                     device=device
                 )
-                probs = probs / probs.sum()
-                nxt = random.choices(nbrs, weights=probs.cpu().tolist(), k=1)[0]
-                if nxt not in visited:
-                    visited[nxt] = step + 1
-                cur = nxt
+                probs /= probs.sum()
+                cur = random.choices(
+                    neighbors[cur], weights=probs.cpu().tolist(), k=1
+                )[0]
+                score[cur] += 1
 
-            for v, r in visited.items():
-                rank_sum[v] += r
-                visit_count[v] += 1
+        # exclude self
+        score.pop(start, None)
+        if score:
+            pos[start] = max(score, key=score.get)
 
-        # Borda score = average rank
-        borda = {
-            v: rank_sum[v] / visit_count[v]
-            for v in visit_count
-        }
-
-        topk = sorted(borda, key=borda.get)[:top_k]
-
-        # Fully connect Top-K consensus
-        for i in range(len(topk)):
-            for j in range(i + 1, len(topk)):
-                pos_pairs.append((topk[i], topk[j]))
-
-    return pos_pairs
+    return pos
 
 # --------------------------
-# Contrastive loss (TopKGraphs-style)
+# Pure attractive loss (no negatives)
 # --------------------------
-def contrastive_loss_borda(emb, pos_pairs, neg_multiplier=2):
-    device = emb.device
+def attractive_loss(emb, pos_dict):
+    i = torch.tensor(list(pos_dict.keys()), device=emb.device)
+    j = torch.tensor(list(pos_dict.values()), device=emb.device)
 
-    pos_i = torch.tensor([p[0] for p in pos_pairs], device=device)
-    pos_j = torch.tensor([p[1] for p in pos_pairs], device=device)
-
-    pos_sim = (emb[pos_i] * emb[pos_j]).sum(dim=1)
-    pos_loss = (1 - pos_sim).mean()
-
-    num_nodes = emb.size(0)
-    neg_i = torch.randint(0, num_nodes, (len(pos_i) * neg_multiplier,), device=device)
-    neg_j = torch.randint(0, num_nodes, (len(pos_j) * neg_multiplier,), device=device)
-
-    neg_sim = (emb[neg_i] * emb[neg_j]).sum(dim=1)
-    neg_loss = F.relu(neg_sim).mean()
-
-    return pos_loss + neg_loss
+    sim = (emb[i] * emb[j]).sum(dim=1)
+    return (1 - sim).mean()
 
 # --------------------------
 # Training
 # --------------------------
-def train(model, x, edge_index, epochs=300, lr=0.001):
+def train(model, x, edge_index, epochs=500, lr=1e-3):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    best_loss = float('inf')
-
-    pos_pairs = borda_topk_pairs(
-        J,
-        edge_index,
-        walk_length=50,
-        num_walks=100,
-        top_k=4
-    )
+    best_loss = float("inf")
+    best_emb = None
 
     for epoch in range(1, epochs + 1):
         model.train()
         optimizer.zero_grad()
+
+        # 🔁 resample positives every epoch
+        pos_dict = sample_best_positive(J, edge_index)
+
         emb = model(x, edge_index)
-        loss = contrastive_loss_borda(emb, pos_pairs)
+        loss = attractive_loss(emb, pos_dict)
+
         loss.backward()
         optimizer.step()
 
         if epoch % 50 == 0:
-            print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
+            print(f"Epoch {epoch:03d} | Loss: {loss.item():.4f}")
 
         if loss.item() < best_loss:
             best_loss = loss.item()
@@ -179,17 +142,17 @@ def evaluate(emb, labels):
     labels = labels.cpu().numpy()
     n_clusters = len(set(labels))
 
-    km = KMeans(n_clusters=n_clusters, n_init=10).fit(emb)
+    km = KMeans(n_clusters=n_clusters, n_init=20).fit(emb)
     ward = AgglomerativeClustering(n_clusters=n_clusters).fit(emb)
 
-    print("TopKGraphs Self-Supervised Embeddings:")
-    print(f"-> KMeans ARI: {adjusted_rand_score(labels, km.labels_):.3f}, "
+    print("\nEvaluation:")
+    print(f"KMeans ARI: {adjusted_rand_score(labels, km.labels_):.3f}, "
           f"NMI: {normalized_mutual_info_score(labels, km.labels_):.3f}")
-    print(f"-> Ward   ARI: {adjusted_rand_score(labels, ward.labels_):.3f}, "
+    print(f"Ward   ARI: {adjusted_rand_score(labels, ward.labels_):.3f}, "
           f"NMI: {normalized_mutual_info_score(labels, ward.labels_):.3f}")
 
 # --------------------------
 # Run
 # --------------------------
-embeddings = train(model, x, edge_index, epochs=500, lr=0.001)
+embeddings = train(model, x, edge_index)
 evaluate(embeddings, labels)
