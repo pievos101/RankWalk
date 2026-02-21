@@ -19,9 +19,31 @@ class VanillaGNN(MessagePassing):
     def message(self, x_j):
         return x_j
 
+class FeatureAwareGNN(MessagePassing):
+    def __init__(self, in_dim, hidden_dim=48, out_dim=48):
+        super().__init__(aggr='add')
+        self.lin1 = nn.Linear(in_dim, hidden_dim)
+        self.lin2 = nn.Linear(hidden_dim, out_dim)
+
+        # Feature-dependent gate
+        self.gate = nn.Sequential(
+            nn.Linear(hidden_dim, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, edge_index):
+        h = F.relu(self.lin1(x))
+        h = self.propagate(edge_index, x=h)
+        return F.normalize(self.lin2(h), dim=1)
+
+    def message(self, x_j):
+        w = self.gate(x_j)
+        return w * x_j
+
 def train_gnn(x, edge_index, J, epochs=500, lr=1e-3, walk_length=10, top_k=5, device='cpu'):
     x, edge_index, J = x.to(device), edge_index.to(device), J.to(device)
-    model = VanillaGNN(x.size(1), out_dim=48).to(device)
+    #model = VanillaGNN(x.size(1), out_dim=48).to(device)
+    model = FeatureAwareGNN(x.size(1), out_dim=48).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     best_emb = None

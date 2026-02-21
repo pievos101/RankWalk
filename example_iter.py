@@ -11,8 +11,8 @@ import numpy as np
 # --------------------------
 n_communities = 4
 size_per_comm = 25
-p_in = 0.4
-p_out = 0.15
+p_in = 0.5
+p_out = 0.20
 seed = 42
 
 # --------------------------
@@ -20,7 +20,7 @@ seed = 42
 # --------------------------
 walk_length = 20
 top_k = 5
-epochs = 200
+epochs = 500
 lr = 1e-3
 
 # --------------------------

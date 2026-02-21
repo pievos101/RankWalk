@@ -12,8 +12,8 @@ import numpy as np
 # --------------------------
 n_communities = 4
 size_per_comm = 25
-p_in = 0.4
-p_out = 0.15
+p_in = 0.5
+p_out = 0.25
 seed = 42
 
 # Generate synthetic SBM graph
@@ -32,6 +32,14 @@ edge_index = to_undirected(data.edge_index)
 # Node features
 # --------------------------
 x = torch.randn(G.number_of_nodes(), 20)  # random features
+#num_nodes = G.number_of_nodes()
+#num_classes = 4  # SBM communities
+
+#labels_t = torch.tensor(labels, dtype=torch.long)
+
+#x = torch.zeros(num_nodes, num_classes)
+#x[torch.arange(num_nodes), labels_t] = 1.0
+
 J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 
 # --------------------------
