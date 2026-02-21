@@ -6,11 +6,8 @@
 
 ## Features
 
-- Generate **synthetic graphs** (Stochastic Block Models) with controllable parameters.
 - Compute **start-node anchored Jaccard similarity** for graph nodes.
 - Train a **StartAnchor GNN** using **contrastive InfoNCE loss** on positive pairs derived from biased random walks.
-- Generate **Node2Vec embeddings** for baseline comparison.
-- Evaluate embeddings using clustering metrics: **ARI** (Adjusted Rand Index) and **NMI** (Normalized Mutual Information).
 
 ---
 
