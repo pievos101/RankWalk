@@ -38,7 +38,7 @@ J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 # GNN training parameters
 # --------------------------
 walk_length = 20
-top_k = 10
+top_k = 5
 epochs = 300
 lr = 1e-3
 
@@ -69,7 +69,7 @@ def run_node2vec(G, dim=48):
         p=1,
         q=1,
         workers=1,
-        seed=42
+        #seed=42
     )
     model = node2vec.fit(window=10, min_count=1, batch_words=128)
 
