@@ -1,6 +1,6 @@
 # RankWalk
 
-**RankWalk** is a Python library for **node representation learning** using start-node anchored random walks on graphs, combined with contrastive learning via a lightweight GNN. It also provides baseline embeddings with **Node2Vec** for comparison. This library is useful for evaluating community structure, clustering, and general graph embedding tasks.
+**RankWalk** is a Python library for **node representation learning** using start-node anchored random walks on graphs, combined with contrastive learning via a lightweight GNN. 
 
 ---
 
