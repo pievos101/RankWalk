@@ -1,3 +1,11 @@
 Metadata-Version: 2.4
 Name: rankwalk
-Version: 0.0.0
+Version: 0.1.0
+Summary: Start-node anchored random walk GNN package
+Requires-Dist: torch
+Requires-Dist: torch_geometric
+Requires-Dist: networkx
+Requires-Dist: scikit-learn
+Requires-Dist: node2vec
+Dynamic: requires-dist
+Dynamic: summary
