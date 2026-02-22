@@ -88,13 +88,22 @@ def evaluate(emb, labels):
 # --------------------------
 # Experiment parameters
 # --------------------------
-n_iter = 10
-n = 250
-avg_degree = 10
+#n_nodes = 100
+#avg_degree = 5
+#max_degree = 10
+#min_community <- 10
+#max_community = 50
+#mu = 0.30 # Mixing parameter
+#tau1 = 2 #2
+#tau2 = 1.1 #1.1   #
+
+n_iter = 3
+n = 100
+avg_degree = 5
 min_community = 10
-tau1 = 2.5
-tau2 = 1.5
-mu = 0.25
+tau1 = 2
+tau2 = 1.1
+mu = 0.05
 
 walk_length = 20
 top_k = 20
