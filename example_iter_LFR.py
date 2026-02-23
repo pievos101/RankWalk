@@ -97,7 +97,7 @@ def evaluate(emb, labels):
 #tau1 = 2 #2
 #tau2 = 1.1 #1.1   #
 
-n_iter = 3
+n_iter = 10
 n = 100
 avg_degree = 5
 min_community = 10
@@ -127,13 +127,24 @@ for i in range(n_iter):
         mu=mu,
         avg_degree=avg_degree,
         min_community=min_community,
-        seed=42 + i
+        #seed=42 + i
     )
 
+    #data = from_networkx(G)
+    #edge_index = to_undirected(data.edge_index)
+    #x = torch.randn(G.number_of_nodes(), 20)  # random features
+    #J = compute_jaccard_fast(edge_index, G.number_of_nodes())
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data = from_networkx(G)
+    # Move the WHOLE data object (edges + attributes) to GPU    
+    data = data.to(device)
     edge_index = to_undirected(data.edge_index)
-    x = torch.randn(G.number_of_nodes(), 20)  # random features
+    # Create node features directly on GPU
+    x = torch.randn(G.number_of_nodes(), 20, device=device)
+    # Make sure compute_jaccard_fast runs on GPU tensors
     J = compute_jaccard_fast(edge_index, G.number_of_nodes())
+
 
     # Train StartAnchor GNN
     emb_gnn = train_gnn(
