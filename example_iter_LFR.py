@@ -14,11 +14,11 @@ def generate_lfr_graph(
     n=250,
     tau1=2.5,
     tau2=1.5,
-    mu=0.15,
+    mu=0.30,
     avg_degree=10,
     min_community=10,
-    max_tries=10,
-    seed=42
+    max_tries=20,
+    #seed=42
 ):
     for attempt in range(max_tries):
         try:
@@ -28,8 +28,8 @@ def generate_lfr_graph(
                 tau2=tau2,
                 mu=mu,
                 average_degree=avg_degree,
-                min_community=min_community,
-                seed=seed + attempt
+                min_community=min_community#,
+                #seed=seed + attempt
             )
             G.remove_edges_from(nx.selfloop_edges(G))
 
@@ -64,7 +64,7 @@ def run_node2vec(G, dim=48, walk_length=20):
         num_walks=100,
         p=1,
         q=1,
-        workers=1,
+        workers=1
     )
     model = node2vec.fit(window=10, min_count=1, batch_words=128)
 
@@ -85,9 +85,15 @@ def evaluate(emb, labels):
     nmi = normalized_mutual_info_score(labels_np, km.labels_)
     return ari, nmi
 
+
+#######################################################
+# - EXPERIMENT - ############################
+#######################################################
+
 # --------------------------
 # Experiment parameters
 # --------------------------
+
 #n_nodes = 100
 #avg_degree = 5
 #max_degree = 10
@@ -97,13 +103,13 @@ def evaluate(emb, labels):
 #tau1 = 2 #2
 #tau2 = 1.1 #1.1   #
 
-n_iter = 10
+n_iter = 5
 n = 100
 avg_degree = 5
 min_community = 10
 tau1 = 2
 tau2 = 1.1
-mu = 0.05
+mu = 0.25
 
 walk_length = 20
 top_k = 20
