@@ -84,7 +84,7 @@ def run_node2vec(G, dim=48, walk_length=20):
 # =========================================================
 walk_length = 20
 top_k = 10
-epochs = 100
+epochs = 200
 lr = 1e-3
 n_iter = 2
 
