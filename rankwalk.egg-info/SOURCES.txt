@@ -3,6 +3,7 @@ pyproject.toml
 setup.py
 rankwalk/__init__.py
 rankwalk/benchmarks.py
+rankwalk/build_temporal_graph.py
 rankwalk/contrastive.py
 rankwalk/data.py
 rankwalk/gnn.py
