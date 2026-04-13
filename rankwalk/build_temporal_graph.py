@@ -3,7 +3,7 @@ import networkx as nx
 from sklearn.metrics import pairwise_distances
 
 
-def build_temporal_graph(df, k_similarity=5):
+def build_temporal_graph(df, k_similarity=10):
     df = df.copy()
 
     # -------------------------------------------------
@@ -40,13 +40,12 @@ def build_temporal_graph(df, k_similarity=5):
     # -------------------------------------------------
     G = nx.Graph()
 
-    # IMPORTANT FIX: attach features here
     for i, row in wide.iterrows():
         G.add_node(
             row["node_id"],
             subject=int(row["subject"]),
             time=float(row["time"]),
-            features=np.asarray(X[i], dtype=np.float32)  # 🔥 FIXED
+            features=np.asarray(X[i], dtype=np.float32)
         )
 
     # -------------------------------------------------
@@ -68,13 +67,30 @@ def build_temporal_graph(df, k_similarity=5):
             G.add_edge(i, j, edge_type="temporal")
 
     # -------------------------------------------------
-    # STEP 6 — similarity edges (kNN in feature space)
+    # STEP 6 — similarity edges (kNN PER TIME SLICE)
     # -------------------------------------------------
-    dist = pairwise_distances(X)
+    for t in wide["time"].unique():
 
-    for i in range(len(X)):
-        neighbors = np.argsort(dist[i])[1:k_similarity + 1]
-        for j in neighbors:
-            G.add_edge(i, j, edge_type="similarity")
+        slice_idx = wide.index[wide["time"] == t].to_numpy()
+
+        if len(slice_idx) <= k_similarity:
+            continue
+
+        X_slice = X[slice_idx]
+        dist = pairwise_distances(X_slice)
+
+        for i_local, i_global in enumerate(slice_idx):
+
+            neighbors = np.argsort(dist[i_local])[1:k_similarity + 1]
+
+            for j_local in neighbors:
+                j_global = slice_idx[j_local]
+
+                G.add_edge(
+                    int(i_global),
+                    int(j_global),
+                    edge_type="similarity",
+                    time=float(t)
+                )
 
     return G, patient_labels

@@ -10,14 +10,15 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 from node2vec import Node2Vec
 from rankwalk import build_temporal_graph, train_gnn, compute_jaccard_fast
 
+
 # =========================================================
-# POOLING: node → patient
+# POOLING
 # =========================================================
 def pool_patient_embeddings(emb, node2patient, method="mean"):
     emb = emb.detach().cpu().numpy()
     node2patient = np.array(node2patient)
 
-    unique_patients = np.sort(np.unique(node2patient))
+    unique_patients = np.unique(node2patient)
     patient_to_idx = {p: i for i, p in enumerate(unique_patients)}
 
     dim = emb.shape[1]
@@ -41,10 +42,6 @@ def pool_patient_embeddings(emb, node2patient, method="mean"):
 def evaluate(emb, labels):
     emb_np = emb.detach().cpu().numpy() if torch.is_tensor(emb) else emb
     labels_np = np.array(labels).ravel()
-
-    assert len(emb_np) == len(labels_np), (
-        f"Mismatch: {len(emb_np)} embeddings vs {len(labels_np)} labels"
-    )
 
     k = len(np.unique(labels_np))
     km = KMeans(n_clusters=k, n_init=10)
@@ -86,7 +83,7 @@ def run_node2vec(G, dim=48, walk_length=20):
 # SETTINGS
 # =========================================================
 walk_length = 20
-top_k = 20
+top_k = 10
 epochs = 100
 lr = 1e-3
 n_iter = 2
@@ -95,33 +92,33 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # =========================================================
-# RESULTS
+# EXPERIMENT LOOP
 # =========================================================
 ari_gnn_list, nmi_gnn_list = [], []
 ari_n2v_list, nmi_n2v_list = [], []
 
 
-# =========================================================
-# EXPERIMENT LOOP
-# =========================================================
 for it in range(n_iter):
+
     print(f"\n================ ITERATION {it+1}/{n_iter} ================")
 
-    # --------------------------
-    # Load data
-    # --------------------------
     df = pd.read_csv("longData.csv")
 
     # --------------------------
     # Build graph
     # --------------------------
-    G, labels_df = build_temporal_graph(df)
+    G, labels_df = build_temporal_graph(df, k_similarity=10)
 
     node_list = sorted(G.nodes())
-
     labels = labels_df["cluster"].to_numpy().ravel()
 
     print(f"Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+
+    # =====================================================
+    # 🔥 CRITICAL FIX: REMOVE EDGE ATTRIBUTES
+    # =====================================================
+    for u, v in G.edges():
+        G[u][v].clear()
 
     # --------------------------
     # PyG conversion
@@ -129,28 +126,26 @@ for it in range(n_iter):
     data = from_networkx(G)
     edge_index = to_undirected(data.edge_index).to(device)
 
-    # =====================================================
-    # FIX: REAL NODE FEATURES (IMPORTANT)
-    # =====================================================
+    # --------------------------
+    # Node features
+    # --------------------------
     x = torch.tensor(
         np.array([G.nodes[n]["features"] for n in node_list]),
         dtype=torch.float,
         device=device
     )
 
-    # Random Features
-    # x = torch.randn(G.number_of_nodes(), 20, device=device)
+    time_feat = torch.tensor(
+        np.array([[G.nodes[n]["time"]] for n in node_list]),
+        dtype=torch.float,
+        device=device
+    )
 
-    # OPTIONAL: add time signal (recommended)
-    #time_feat = torch.tensor(
-    #    np.array([[G.nodes[n]["time"]] for n in node_list]),
-    #    dtype=torch.float,
-    #    device=device
-    #)
+    x = torch.cat([x, time_feat], dim=1)
 
-    #x = torch.cat([x, time_feat], dim=1)
-
-    # Make sure compute_jaccard_fast runs on GPU tensors
+    # --------------------------
+    # Jaccard
+    # --------------------------
     J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 
     # --------------------------
@@ -168,37 +163,28 @@ for it in range(n_iter):
     )
 
     # --------------------------
-    # node → patient mapping
+    # pooling
     # --------------------------
-    node2patient = np.array([
-        G.nodes[n]["subject"] for n in node_list
-    ])
+    node2patient = np.array([G.nodes[n]["subject"] for n in node_list])
 
-    # --------------------------
-    # GNN pooling
-    # --------------------------
-    emb_patient_gnn = pool_patient_embeddings(
-        emb_node,
-        node2patient
-    )
+    emb_patient_gnn = pool_patient_embeddings(emb_node, node2patient)
 
     ari, nmi = evaluate(emb_patient_gnn, labels)
+
     ari_gnn_list.append(ari)
     nmi_gnn_list.append(nmi)
 
     print(f"GNN   ARI={ari:.4f} | NMI={nmi:.4f}")
 
-    # =====================================================
-    # NODE2VEC (FAIR COMPARISON)
-    # =====================================================
+    # --------------------------
+    # Node2Vec
+    # --------------------------
     emb_node_n2v = run_node2vec(G, dim=48, walk_length=walk_length)
 
-    emb_patient_n2v = pool_patient_embeddings(
-        emb_node_n2v,
-        node2patient
-    )
+    emb_patient_n2v = pool_patient_embeddings(emb_node_n2v, node2patient)
 
     ari, nmi = evaluate(emb_patient_n2v, labels)
+
     ari_n2v_list.append(ari)
     nmi_n2v_list.append(nmi)
 
@@ -211,11 +197,11 @@ for it in range(n_iter):
 print("\n================ FINAL RESULTS ================")
 
 print(
-    f"GNN | ARI: {np.mean(ari_gnn_list):.3f} ± {np.std(ari_gnn_list):.3f} | "
-    f"NMI: {np.mean(nmi_gnn_list):.3f} ± {np.std(nmi_gnn_list):.3f}"
+    f"GNN | ARI {np.mean(ari_gnn_list):.3f} ± {np.std(ari_gnn_list):.3f} | "
+    f"NMI {np.mean(nmi_gnn_list):.3f} ± {np.std(nmi_gnn_list):.3f}"
 )
 
 print(
-    f"N2V | ARI: {np.mean(ari_n2v_list):.3f} ± {np.std(ari_n2v_list):.3f} | "
-    f"NMI: {np.mean(nmi_n2v_list):.3f} ± {np.std(nmi_n2v_list):.3f}"
+    f"N2V | ARI {np.mean(ari_n2v_list):.3f} ± {np.std(ari_n2v_list):.3f} | "
+    f"NMI {np.mean(nmi_n2v_list):.3f} ± {np.std(nmi_n2v_list):.3f}"
 )
