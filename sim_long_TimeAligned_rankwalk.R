@@ -33,7 +33,7 @@ from rankwalk import build_temporal_graph, train_gnn, compute_jaccard_fast
 
 
 def run_rankwalk_gnn(df,
-                     epochs=100,
+                     epochs=300,
                      lr=1e-3,
                      top_k=10,
                      walk_length=20):
@@ -139,7 +139,7 @@ colnames(RES) <- c(
   "RankWalk_GNN"
 )
 
-set.seed(123)
+#set.seed(123)
 
 # =========================================================
 # MAIN LOOP
@@ -231,7 +231,7 @@ for (ii in 1:n_iter) {
 
   clusters <- py$run_rankwalk_gnn(
     Longdat2,   # 🔥 IMPORTANT FIX: LONG FORMAT
-    epochs = 100L,
+    epochs = 300L,
     lr = 0.001,
     top_k = 10L,
     walk_length = 20L
@@ -247,7 +247,7 @@ for (ii in 1:n_iter) {
   RES[ii,2] <- ari2
   RES[ii,3] <- ari3
 
-  print(RES[ii,])
+  print(RES)
 }
 
 stop("All good!")
