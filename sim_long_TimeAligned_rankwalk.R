@@ -234,7 +234,7 @@ for (ii in 1:n_iter) {
     epochs = 300L,
     lr = 0.001,
     top_k = 10L,
-    walk_length = 20L
+    walk_length = 30L
   )
 
   # NOTE: cluster alignment assumes same subject order
