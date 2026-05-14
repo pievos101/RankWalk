@@ -255,7 +255,11 @@ stop("All good!")
 # =========================================================
 # PLOT RESULTS
 # =========================================================
+library(ggplot2)
+library(reshape)
+
 RES_df <- as.data.frame(RES)
+#colnames(RES_df) = c("longTAPIO_PCw","TopKGraphs","longTAPIO_PC1")
 RES_m <- melt(RES_df)
 
 ggplot(RES_m, aes(x = variable, y = value, fill = variable)) +
