@@ -77,7 +77,7 @@ def run_rankwalk_gnn(df,
         device=device
     )
 
-    x = torch.cat([x, t], dim=1)
+    #x = torch.cat([x, t], dim=1)
 
     # =====================================================
     # RankWalk similarity
@@ -231,10 +231,10 @@ for (ii in 1:n_iter) {
 
   clusters <- py$run_rankwalk_gnn(
     Longdat2,   # 🔥 IMPORTANT FIX: LONG FORMAT
-    epochs = 300L,
+    epochs = 100L,
     lr = 0.001,
     top_k = 10L,
-    walk_length = 30L
+    walk_length = 20L
   )
 
   # NOTE: cluster alignment assumes same subject order
