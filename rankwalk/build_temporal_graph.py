@@ -1,13 +1,38 @@
 import numpy as np
 import networkx as nx
 from sklearn.metrics import pairwise_distances
+from sklearn.preprocessing import StandardScaler
+
+
+def _robust_distance_matrix(X, n_perturb=5, noise_level=0.01):
+    """
+    Build a robust distance matrix via ensemble perturbations.
+    Reduces sensitivity to single-feature corruption.
+    """
+
+    n = X.shape[0]
+    dist_accum = np.zeros((n, n), dtype=np.float32)
+
+    for _ in range(n_perturb):
+
+        X_pert = X.copy()
+
+        # small gaussian noise (prevents brittle kNN boundaries)
+        X_pert += np.random.normal(0, noise_level, X_pert.shape)
+
+        # robust scaling per feature
+        X_pert = StandardScaler().fit_transform(X_pert)
+
+        dist_accum += pairwise_distances(X_pert)
+
+    return dist_accum / n_perturb
 
 
 def build_temporal_graph(df, k_similarity=10):
     df = df.copy()
 
     # -------------------------------------------------
-    # STEP 1 — SAFE wide format (longitudinal matrix)
+    # STEP 1 — wide format
     # -------------------------------------------------
     wide = (
         df.groupby(["subject", "time", "outcome"])["y"]
@@ -19,15 +44,28 @@ def build_temporal_graph(df, k_similarity=10):
     )
 
     feature_cols = [c for c in wide.columns if c not in ["subject", "time"]]
-    X = wide[feature_cols].values
+    X = wide[feature_cols].values.astype(np.float32)
 
     # -------------------------------------------------
-    # STEP 2 — stable node ids
+    # STEP 2 — robust feature preprocessing
+    # -------------------------------------------------
+    X = np.nan_to_num(X)
+
+    # clip extreme values (IMPORTANT for robustness)
+    q_low = np.quantile(X, 0.01, axis=0)
+    q_high = np.quantile(X, 0.99, axis=0)
+    X = np.clip(X, q_low, q_high)
+
+    # standardize
+    X = StandardScaler().fit_transform(X)
+
+    # -------------------------------------------------
+    # STEP 3 — node ids
     # -------------------------------------------------
     wide["node_id"] = np.arange(len(wide))
 
     # -------------------------------------------------
-    # STEP 3 — patient-level labels
+    # STEP 4 — labels
     # -------------------------------------------------
     patient_labels = (
         df[["subject", "cluster"]]
@@ -36,7 +74,7 @@ def build_temporal_graph(df, k_similarity=10):
     )
 
     # -------------------------------------------------
-    # STEP 4 — build graph
+    # STEP 5 — graph
     # -------------------------------------------------
     G = nx.Graph()
 
@@ -45,11 +83,11 @@ def build_temporal_graph(df, k_similarity=10):
             row["node_id"],
             subject=int(row["subject"]),
             time=float(row["time"]),
-            features=np.asarray(X[i], dtype=np.float32)
+            features=X[i]
         )
 
     # -------------------------------------------------
-    # STEP 5 — temporal edges (within subject)
+    # STEP 6 — temporal edges
     # -------------------------------------------------
     node_index = {
         (r.subject, r.time): r.node_id
@@ -59,16 +97,16 @@ def build_temporal_graph(df, k_similarity=10):
     for subject in wide["subject"].unique():
         sub = wide[wide["subject"] == subject].sort_values("time")
 
-        times = sub["time"].values
-
-        for t1, t2 in zip(times[:-1], times[1:]):
+        for t1, t2 in zip(sub["time"].values[:-1], sub["time"].values[1:]):
             i = node_index[(subject, t1)]
             j = node_index[(subject, t2)]
             G.add_edge(i, j, edge_type="temporal")
 
     # -------------------------------------------------
-    # STEP 6 — similarity edges (kNN PER TIME SLICE)
+    # STEP 7 — ROBUST similarity edges (KEY CHANGE)
     # -------------------------------------------------
+    dist = _robust_distance_matrix(X)
+
     for t in wide["time"].unique():
 
         slice_idx = wide.index[wide["time"] == t].to_numpy()
@@ -76,14 +114,15 @@ def build_temporal_graph(df, k_similarity=10):
         if len(slice_idx) <= k_similarity:
             continue
 
-        X_slice = X[slice_idx]
-        dist = pairwise_distances(X_slice)
+        dist_slice = dist[np.ix_(slice_idx, slice_idx)]
 
         for i_local, i_global in enumerate(slice_idx):
 
-            neighbors = np.argsort(dist[i_local])[1:k_similarity + 1]
+            # stable kNN via robust distances
+            neighbors = np.argsort(dist_slice[i_local])[1:k_similarity + 1]
 
             for j_local in neighbors:
+
                 j_global = slice_idx[j_local]
 
                 G.add_edge(
