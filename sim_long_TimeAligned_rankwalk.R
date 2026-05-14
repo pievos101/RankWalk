@@ -230,7 +230,7 @@ for (ii in 1:n_iter) {
   cat("RankWalk GNN\n")
 
   clusters <- py$run_rankwalk_gnn(
-    Longdat2,   # 🔥 IMPORTANT FIX: LONG FORMAT
+    Longdat2,   
     epochs = 100L,
     lr = 0.001,
     top_k = 10L,
