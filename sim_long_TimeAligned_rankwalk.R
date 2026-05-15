@@ -100,31 +100,12 @@ def run_rankwalk_gnn(df,
 
     emb = emb.detach().cpu().numpy()
 
-    # =====================================================
-    # Pooling (subject level)
-    # =====================================================
     node2subject = np.array([G.nodes[n]['subject'] for n in node_list])
 
-    subjects = np.unique(node2subject)
-    subj_map = {s:i for i,s in enumerate(subjects)}
-
-    pooled = np.zeros((len(subjects), emb.shape[1]))
-    counts = np.zeros(len(subjects))
-
-    for i, s in enumerate(node2subject):
-        j = subj_map[s]
-        pooled[j] += emb[i]
-        counts[j] += 1
-
-    pooled = pooled / np.maximum(counts[:, None], 1)
-
-    # =====================================================
-    # clustering
-    # =====================================================
-    k = len(np.unique(labels))
-    km = KMeans(n_clusters=k, n_init=10)
-
-    return km.fit_predict(pooled)
+    return {
+        'embeddings': emb,
+        'subjects': node2subject
+    }
 ")
 
 # =========================================================
@@ -225,20 +206,81 @@ for (ii in 1:n_iter) {
   ari2 <- ARI(trueClusIDs, res2$cl)
 
   # =====================================================
-  # RankWalk GNN (USES LONG FORMAT — FIX)
+  # RankWalk GNN (USES LONG FORMAT)
   # =====================================================
   cat("RankWalk GNN\n")
 
-  clusters <- py$run_rankwalk_gnn(
-    Longdat2,   
+  res_gnn <- py$run_rankwalk_gnn(
+    Longdat2,
     epochs = 100L,
     lr = 0.001,
     top_k = 10L,
     walk_length = 20L
   )
 
-  # NOTE: cluster alignment assumes same subject order
-  ari3 <- ARI(trueClusIDs, as.numeric(clusters))
+  # -------------------------------------------------
+  # Extract
+  # -------------------------------------------------
+  EMB <- res_gnn$embeddings
+  SUBJ <- as.numeric(res_gnn$subjects)
+
+  subjects_unique <- sort(unique(SUBJ))
+
+  n_subj <- length(subjects_unique)
+
+  # -------------------------------------------------
+  # Node indices by subject
+  # -------------------------------------------------
+  nodes_by_subject <- lapply(subjects_unique, function(s) {
+    which(SUBJ == s)
+  })
+
+  # -------------------------------------------------
+  # Pairwise node distances
+  # -------------------------------------------------
+  DIST <- as.matrix(dist(EMB))
+
+  # -------------------------------------------------
+  # Subject-subject block distances
+  # -------------------------------------------------
+  S <- matrix(0, n_subj, n_subj)
+
+  for (a in seq_len(n_subj)) {
+
+    idx_a <- nodes_by_subject[[a]]
+
+    for (b in seq_len(n_subj)) {
+
+      idx_b <- nodes_by_subject[[b]]
+
+      block <- DIST[idx_a, idx_b, drop = FALSE]
+
+      S[a, b] <- mean(block, na.rm = TRUE)
+    }
+  }
+
+  # ---------------------------------------------------------
+  # Optional cleanup
+  # ---------------------------------------------------------
+
+  diag(S) <- 0
+  S[is.na(S)] <- 1
+
+  # ---------------------------------------------------------
+  # Symmetrie
+  # ---------------------------------------------------------
+
+  S <- (S + t(S)) / 2
+  
+  # -------------------------------------------------
+  # Ward clustering
+  # -------------------------------------------------
+  
+  hc <- hclust(as.dist(S), method = "ward.D2")
+
+  clusters <- cutree(hc, k = 4)
+
+  ari3 <- ARI(trueClusIDs, clusters)
 
   # =====================================================
   # STORE RESULTS
