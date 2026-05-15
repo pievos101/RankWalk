@@ -26,10 +26,13 @@ class FeatureAwareGNN(MessagePassing):
         self.lin2 = nn.Linear(hidden_dim, out_dim)
 
         # Feature-dependent gate
-        self.gate = nn.Sequential(
-            nn.Linear(hidden_dim, 1),
-            nn.Sigmoid()
-        )
+        #self.gate = nn.Sequential(
+        #    nn.Linear(hidden_dim, 1),
+        #    nn.Sigmoid()
+        #)
+
+        # FEATURE-WISE GATING 
+        self.gate = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.Sigmoid())
 
     def forward(self, x, edge_index):
         h = F.relu(self.lin1(x))
