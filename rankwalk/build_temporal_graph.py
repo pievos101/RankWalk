@@ -1,34 +1,67 @@
 import numpy as np
 import networkx as nx
-from sklearn.metrics import pairwise_distances
+
+from scipy.spatial.distance import pdist, squareform
 from sklearn.preprocessing import StandardScaler
 
 
-def _robust_distance_matrix(X, n_perturb=5, noise_level=0.01):
+def _robust_distance_matrix(
+    X,
+    n_subspaces=5,
+    subspace_ratio=0.7
+):
     """
-    Build a robust distance matrix via ensemble perturbations.
-    Reduces sensitivity to single-feature corruption.
+    SAME robustness strategy as the R version:
+
+    - random feature subspaces
+    - Euclidean distances per subspace
+    - rank aggregation across subspaces
     """
 
-    n = X.shape[0]
+    n, p = X.shape
+
+    subspace_size = max(
+        2,
+        int(np.floor(subspace_ratio * p))
+    )
+
     dist_accum = np.zeros((n, n), dtype=np.float32)
 
-    for _ in range(n_perturb):
+    for _ in range(n_subspaces):
 
-        X_pert = X.copy()
+        # random feature subset
+        feat_idx = np.random.choice(
+            p,
+            size=subspace_size,
+            replace=False
+        )
 
-        # small gaussian noise (prevents brittle kNN boundaries)
-        X_pert += np.random.normal(0, noise_level, X_pert.shape)
+        X_sub = X[:, feat_idx]
 
-        # robust scaling per feature
-        X_pert = StandardScaler().fit_transform(X_pert)
+        # pairwise Euclidean distance
+        d = squareform(
+            pdist(X_sub, metric="euclidean")
+        )
 
-        dist_accum += pairwise_distances(X_pert)
+        # SAME AS R: rank(d)
+        ranked = (
+            d.ravel()
+            .argsort()
+            .argsort()
+            .reshape(d.shape)
+        )
 
-    return dist_accum / n_perturb
+        dist_accum += ranked
+
+    return dist_accum / n_subspaces
 
 
-def build_temporal_graph(df, k_similarity=10):
+def build_temporal_graph(
+    df,
+    k_similarity=10,
+    n_subspaces=5,
+    subspace_ratio=0.7
+):
     df = df.copy()
 
     # -------------------------------------------------
@@ -43,21 +76,25 @@ def build_temporal_graph(df, k_similarity=10):
         .reset_index(drop=True)
     )
 
-    feature_cols = [c for c in wide.columns if c not in ["subject", "time"]]
+    feature_cols = [
+        c for c in wide.columns
+        if c not in ["subject", "time"]
+    ]
+
     X = wide[feature_cols].values.astype(np.float32)
 
     # -------------------------------------------------
-    # STEP 2 — robust feature preprocessing
+    # STEP 2 — SAME normalization as R
     # -------------------------------------------------
     X = np.nan_to_num(X)
 
-    # clip extreme values (IMPORTANT for robustness)
-    q_low = np.quantile(X, 0.01, axis=0)
-    q_high = np.quantile(X, 0.99, axis=0)
-    X = np.clip(X, q_low, q_high)
-
-    # standardize
+    # equivalent to R: scale(X_raw)
     X = StandardScaler().fit_transform(X)
+
+    # SAME clipping as R
+    clip_val = 4
+    X[X > clip_val] = clip_val
+    X[X < -clip_val] = -clip_val
 
     # -------------------------------------------------
     # STEP 3 — node ids
@@ -79,6 +116,7 @@ def build_temporal_graph(df, k_similarity=10):
     G = nx.Graph()
 
     for i, row in wide.iterrows():
+
         G.add_node(
             row["node_id"],
             subject=int(row["subject"]),
@@ -95,31 +133,56 @@ def build_temporal_graph(df, k_similarity=10):
     }
 
     for subject in wide["subject"].unique():
-        sub = wide[wide["subject"] == subject].sort_values("time")
 
-        for t1, t2 in zip(sub["time"].values[:-1], sub["time"].values[1:]):
+        sub = (
+            wide[wide["subject"] == subject]
+            .sort_values("time")
+        )
+
+        for t1, t2 in zip(
+            sub["time"].values[:-1],
+            sub["time"].values[1:]
+        ):
+
             i = node_index[(subject, t1)]
             j = node_index[(subject, t2)]
-            G.add_edge(i, j, edge_type="temporal")
+
+            G.add_edge(
+                i,
+                j,
+                edge_type="temporal"
+            )
 
     # -------------------------------------------------
-    # STEP 7 — ROBUST similarity edges (KEY CHANGE)
+    # STEP 7 — SAME slice-based similarity as R
     # -------------------------------------------------
-    dist = _robust_distance_matrix(X)
+    for t in sorted(wide["time"].unique()):
 
-    for t in wide["time"].unique():
-
-        slice_idx = wide.index[wide["time"] == t].to_numpy()
+        slice_idx = wide.index[
+            wide["time"] == t
+        ].to_numpy()
 
         if len(slice_idx) <= k_similarity:
             continue
 
-        dist_slice = dist[np.ix_(slice_idx, slice_idx)]
+        # SAME AS R:
+        # X_slice <- X[idx, , drop = FALSE]
+        X_slice = X[slice_idx]
+
+        # SAME random-subspace ensemble
+        dist_slice = _robust_distance_matrix(
+            X_slice,
+            n_subspaces=n_subspaces,
+            subspace_ratio=subspace_ratio
+        )
 
         for i_local, i_global in enumerate(slice_idx):
 
-            # stable kNN via robust distances
-            neighbors = np.argsort(dist_slice[i_local])[1:k_similarity + 1]
+            # SAME AS R:
+            # neighbors <- order(...)[2:(k+1)]
+            neighbors = np.argsort(
+                dist_slice[i_local]
+            )[1:k_similarity + 1]
 
             for j_local in neighbors:
 
