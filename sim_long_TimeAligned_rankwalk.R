@@ -137,6 +137,8 @@ for (ii in 1:n_iter) {
   id <- sample(1:5, 1)
   r_sigma_diag[id] <- sample(3:20, 1)
 
+  print(r_sigma_diag)
+
   Longdat2 <- simLongData(
     ranTimes = FALSE,
     n_i = 10,
@@ -275,7 +277,7 @@ for (ii in 1:n_iter) {
   # -------------------------------------------------
   # Ward clustering
   # -------------------------------------------------
-  
+
   hc <- hclust(as.dist(S), method = "ward.D2")
 
   clusters <- cutree(hc, k = 4)
@@ -303,11 +305,15 @@ library(reshape)
 RES_df <- as.data.frame(RES)
 #colnames(RES_df) = c("longTAPIO_PCw","TopKGraphs","longTAPIO_PC1")
 RES_m <- melt(RES_df)
+colnames(RES_m) = c("Method","value")
 
-ggplot(RES_m, aes(x = variable, y = value, fill = variable)) +
+ggplot(RES_m, aes(x = Method, y = value, fill = Method)) +
   geom_boxplot() +
   ylim(0,1) +
   theme_minimal() +
   xlab("Method") +
   ylab("ARI") +
-  theme(text = element_text(size = 15))
+  theme(
+    text = element_text(size = 15),
+    axis.text.x = element_blank()
+  )
