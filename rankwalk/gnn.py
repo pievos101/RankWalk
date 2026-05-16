@@ -71,6 +71,12 @@ class FeatureAwareGNN(MessagePassing):
 
     def forward(self, x, edge_index):
 
+        # subsample tests
+        # feature drop out in one node
+        #x = x * (torch.rand_like(x) > 0.1).float()
+        # drop out of whole feature
+        x = x * (torch.rand(1, x.size(1), device=x.device) > 0.1).float() 
+
         h_feat = self.feat_encoder(x)
 
         h_struct = self.propagate(edge_index, x=h_feat)
