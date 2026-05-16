@@ -75,9 +75,11 @@ class FeatureAwareGNN(MessagePassing):
         # feature drop out in one node
         #x = x * (torch.rand_like(x) > 0.1).float()
         # drop out of whole feature
-        x = x * (torch.rand(1, x.size(1), device=x.device) > 0.1).float() 
+        #x = x * (torch.rand(1, x.size(1), device=x.device) > 0.1).float() 
+        ###########
 
-        h_feat = self.feat_encoder(x)
+        #h_feat = self.feat_encoder(x)
+        h_feat = self.feat_encoder(x + 0.01 * torch.randn_like(x))
 
         h_struct = self.propagate(edge_index, x=h_feat)
         h_struct = self.struct_encoder(h_struct)
@@ -109,9 +111,9 @@ def train_gnn(x, edge_index, J, epochs=500, lr=1e-3, walk_length=10, top_k=5, de
         loss.backward()
         optimizer.step()
 
-        if loss.item() < best_loss:
-            best_loss = loss.item()
-            best_emb = emb.detach()
+        #if loss.item() < best_loss:
+        best_loss = loss.item()
+        best_emb = emb.detach()
 
         if epoch % 20 == 0:
             print(f"Epoch {epoch:03d} | InfoNCE Loss: {loss.item():.4f}")
