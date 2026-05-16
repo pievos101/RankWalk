@@ -132,10 +132,12 @@ for (ii in 1:n_iter) {
   # -----------------------------
   # SIMULATION (LONG FORMAT)
   # -----------------------------
-  r_eta <- 3
-  r_sigma_diag <- rep(3, 5)
-  id <- sample(1:5, 1)
-  r_sigma_diag[id] <- sample(3:20, 1)
+  r_eta = 3 #sample(1:10,1)
+  r_sigma_diag = rep(3, 5) #sample(1:6, 5, replace=TRUE)
+  #r_sigma_diag = sample(3:10, 5, replace=TRUE)
+  id = sample(1:5, 1)
+  r_sigma_diag[id] =  sample(3:20, 1)
+
 
   print(r_sigma_diag)
 
