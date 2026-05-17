@@ -74,7 +74,7 @@ class FeatureAwareGNN(MessagePassing):
         # subsample tests
         # feature drop out in one node
         #x = x * (torch.rand_like(x) > 0.1).float()
-        # drop out of whole feature
+        # drop out of whole feature 
         #x = x * (torch.rand(1, x.size(1), device=x.device) > 0.1).float() 
         ###########
 
@@ -94,6 +94,55 @@ class FeatureAwareGNN(MessagePassing):
     def message(self, x_j):
         return x_j
 
+    def forward_multi_view(self, x, edge_index):
+
+        # =====================================================
+        # TAPIO-STYLE RANDOM FEATURE SUBSPACES
+        # =====================================================
+
+        p = 0.8
+
+        mask1 = (
+            torch.rand(1, x.size(1), device=x.device) < p
+        ).float()
+
+        mask2 = (
+            torch.rand(1, x.size(1), device=x.device) < p
+        ).float()
+
+        # two stochastic feature views
+        x1 = x * mask1
+        x2 = x * mask2
+
+        # =====================================================
+        # SHARED FEATURE ENCODER
+        # =====================================================
+
+        h1 = self.feat_encoder(x1)
+        h2 = self.feat_encoder(x2)
+
+        # ensemble averaging (TAPIO consensus analogue)
+        h_feat = (h1 + h2) / 2
+
+        # =====================================================
+        # GRAPH STRUCTURE
+        # =====================================================
+
+        h_struct = self.propagate(edge_index, x=h_feat)
+        h_struct = self.struct_encoder(h_struct)
+
+        # =====================================================
+        # FUSION
+        # =====================================================
+
+        h = self.fuse(torch.cat([h_feat, h_struct], dim=1))
+
+        h = self.norm(h)
+        h = self.out(h)
+
+        emb = F.normalize(h, dim=1)
+
+        return emb, h1, h2
 
 def train_gnn(x, edge_index, J, epochs=500, lr=1e-3, walk_length=10, top_k=5, device='cpu'):
     x, edge_index, J = x.to(device), edge_index.to(device), J.to(device)
@@ -106,14 +155,20 @@ def train_gnn(x, edge_index, J, epochs=500, lr=1e-3, walk_length=10, top_k=5, de
     for epoch in range(1, epochs + 1):
         optimizer.zero_grad()
         emb = model(x, edge_index)
+        #emb, h1, h2 = model(x, edge_index)
         pos_pairs = sample_pos_pairs_start_anchor(J, edge_index, x.size(0), walk_length, top_k)
         loss = contrastive_loss_weighted_fixed(emb, pos_pairs)
+        # TAPIO-style view consistency
+        #loss_view = F.mse_loss(h1, h2)
+        # combined loss
+        #loss = loss_struct + 0.05 * loss_view
+        #
         loss.backward()
         optimizer.step()
 
-        #if loss.item() < best_loss:
-        best_loss = loss.item()
-        best_emb = emb.detach()
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            best_emb = emb.detach()
 
         if epoch % 20 == 0:
             print(f"Epoch {epoch:03d} | InfoNCE Loss: {loss.item():.4f}")
