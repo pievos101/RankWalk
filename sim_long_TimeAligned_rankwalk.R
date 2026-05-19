@@ -133,10 +133,10 @@ for (ii in 1:n_iter) {
   # SIMULATION (LONG FORMAT)
   # -----------------------------
   r_eta = 3 #sample(1:10,1)
-  r_sigma_diag = rep(3, 5) #sample(1:6, 5, replace=TRUE)
+  r_sigma_diag = rep(5, 5) #sample(1:6, 5, replace=TRUE)
   #r_sigma_diag = sample(3:10, 5, replace=TRUE)
   id = sample(1:5, 1)
-  r_sigma_diag[id] =  sample(3:20, 1)
+  #r_sigma_diag[id] =  sample(3:20, 1)
 
 
   print(r_sigma_diag)
@@ -165,7 +165,7 @@ for (ii in 1:n_iter) {
   )[,2]
 
   set_levels <- 4
-  set_n_features <- 5
+  set_n_features <- NaN
 
   DD <- as.matrix(Longdat2_wide[,4:ncol(Longdat2_wide)])
 
