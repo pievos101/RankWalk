@@ -10,20 +10,20 @@ class FeatureAwareGNN(MessagePassing):
     def __init__(self, in_dim, num_nodes, hidden_dim=64, out_dim=48):
         super().__init__(aggr='add')
         
-        # Expressive feature encoder
+        # 1. Expressive feature encoder maps raw attributes to hidden space
         self.feat_encoder = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
         
-        # Dedicated pure structural encoder (Uses structural ID embeddings)
-        self.struct_embed = nn.Embedding(num_nodes, hidden_dim)
-        self.struct_encoder = nn.Linear(hidden_dim, hidden_dim)
+        # REMOVED: self.struct_embed
+        # REMOVED: self.struct_encoder
         
-        # Interaction Fusion Layer
-        self.fuse = nn.Sequential(
-            nn.Linear(hidden_dim * 2, hidden_dim),
+        # 2. Changed input dimension from (hidden_dim * 2) to (hidden_dim) 
+        # since tracks are no longer concatenated side-by-side
+        self.post_prop_dense = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
@@ -32,23 +32,22 @@ class FeatureAwareGNN(MessagePassing):
         self.norm = nn.LayerNorm(hidden_dim)
 
     def forward(self, x, edge_index, node_ids=None):
-        if node_ids is None:
-            node_ids = torch.arange(x.size(0), device=x.device)
-            
-        #h_feat = self.feat_encoder(x + 0.01 * torch.randn_like(x))
+        # 3. Compute raw feature embeddings 
         h_feat = self.feat_encoder(x)
         
-        s_init = self.struct_embed(node_ids)
-        h_struct = self.propagate(edge_index, x=s_init)
-        h_struct = self.struct_encoder(h_struct)
+        # 4. CRUCIAL CHANGE: Message passing now runs directly over feature states
+        # rather than isolated structural ID embeddings
+        h_graph = self.propagate(edge_index, x=h_feat)
         
-        h = self.fuse(torch.cat([h_feat, h_struct], dim=1))
+        # 5. Process the combined topology-feature matrix through post-processing layers
+        h = self.post_prop_dense(h_graph)
         h = self.norm(h)
         h = self.out(h)
         
         return F.normalize(h, dim=1)
 
     def message(self, x_j):
+        # x_j now explicitly represents the feature profiles of neighboring nodes
         return x_j
 
 
