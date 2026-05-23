@@ -133,10 +133,10 @@ for (ii in 1:n_iter) {
   # SIMULATION (LONG FORMAT)
   # -----------------------------
   r_eta = 3 #sample(1:10,1)
-  r_sigma_diag = rep(3, 5) #sample(1:6, 5, replace=TRUE)
+  r_sigma_diag = rep(5, 5) #sample(1:6, 5, replace=TRUE)
   #r_sigma_diag = sample(3:10, 5, replace=TRUE)
   id = sample(1:5, 1)
-  r_sigma_diag[id] =  sample(3:20, 1)
+  #r_sigma_diag[id] =  sample(3:20, 1)
 
 
   print(r_sigma_diag)
@@ -212,24 +212,25 @@ for (ii in 1:n_iter) {
   # =====================================================
   # RankWalk GNN (USES LONG FORMAT)
   # =====================================================
+  # =====================================================
+  # RankWalk GNN (USES LONG FORMAT)
+  # =====================================================
   cat("RankWalk GNN\n")
 
   res_gnn <- py$run_rankwalk_gnn(
     Longdat2,
-    epochs = 200L,
+    epochs = 100L,
     lr = 0.001,
-    top_k = 20L,
+    top_k = 10L,
     walk_length = 20L
   )
 
   # -------------------------------------------------
   # Extract
   # -------------------------------------------------
-  EMB <- res_gnn$embeddings
+  EMB <- res_gnn$embeddings    # Shape: [Total_Nodes, 48]
   SUBJ <- as.numeric(res_gnn$subjects)
-
   subjects_unique <- sort(unique(SUBJ))
-
   n_subj <- length(subjects_unique)
 
   # -------------------------------------------------
@@ -240,9 +241,16 @@ for (ii in 1:n_iter) {
   })
 
   # -------------------------------------------------
-  # Pairwise node distances
+  # FIX: Calculate Proper Angular/Cosine Distance Matrix
   # -------------------------------------------------
-  DIST <- as.matrix(dist(EMB))
+  # Since EMB is L2 normalized, EMB %*% t(EMB) yields the exact Cosine Similarity
+  Cosine_Sim <- EMB %*% t(EMB)
+  
+  # Bound it between -1 and 1 just in case of microscopic floating point issues
+  Cosine_Sim <- pmin(pmax(Cosine_Sim, -1), 1)
+  
+  # Convert Cosine Similarity to a clean Distance Metric [0 to 2]
+  DIST_COS <- 1 - Cosine_Sim
 
   # -------------------------------------------------
   # Subject-subject block distances
@@ -250,38 +258,30 @@ for (ii in 1:n_iter) {
   S <- matrix(0, n_subj, n_subj)
 
   for (a in seq_len(n_subj)) {
-
     idx_a <- nodes_by_subject[[a]]
 
     for (b in seq_len(n_subj)) {
-
       idx_b <- nodes_by_subject[[b]]
 
-      block <- DIST[idx_a, idx_b, drop = FALSE]
+      # Extract the cross-subject node pairwise distances
+      block <- DIST_COS[idx_a, idx_b, drop = FALSE]
 
+      # Average distance across the longitudinal trajectories
       S[a, b] <- mean(block, na.rm = TRUE)
     }
   }
 
   # ---------------------------------------------------------
-  # Optional cleanup
+  # Symmetrize and isolate diagonal
   # ---------------------------------------------------------
-
   diag(S) <- 0
   S[is.na(S)] <- 1
-
-  # ---------------------------------------------------------
-  # Symmetrie
-  # ---------------------------------------------------------
-
   S <- (S + t(S)) / 2
   
   # -------------------------------------------------
-  # Ward clustering
+  # Ward clustering via proper Cosine metrics
   # -------------------------------------------------
-
   hc <- hclust(as.dist(S), method = "ward.D2")
-
   clusters <- cutree(hc, k = 4)
 
   ari3 <- ARI(trueClusIDs, clusters)
