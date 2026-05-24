@@ -98,7 +98,7 @@ colnames(RES) <- c(
   "TAPIO_PC1",
   "TAPIO_weighted",
   "kml3d",
-  "fPCA_KMeans", # Strong Classical ML Baseline
+  "fPCA_KMeans", 
   "RankWalk_GNN"
 )
 
@@ -110,9 +110,8 @@ for (ii in 1:n_iter) {
   cat("\n================ ITER", ii, "================\n")
 
   r_eta = 3 
-  r_sigma_diag = rep(3, 5) 
+  r_sigma_diag = rep(5, 5) 
   id = sample(1:5, 1)
-  r_sigma_diag[id] =  sample(3:20, 1)
 
   print(r_sigma_diag)
 
@@ -211,32 +210,21 @@ for (ii in 1:n_iter) {
   # =====================================================
   cat("fPCA + KMeans\n")
   
-  # Set up a B-spline basis for the 10 time steps
   basis <- create.bspline.basis(rangeval = c(1, 10), nbasis = 5)
-  
-  # Concatenate functional scores across all 5 markers
   fpca_features <- matrix(0, nrow = n_samples, ncol = 0)
   
   for (m in 1:5) {
-    # Extract matrix for current outcome marker: [time, subjects]
     marker_data <- t(tr1nn[, , m])
-    
-    # Smooth data into a functional data object
     fd_obj <- smooth.basis(1:10, marker_data, basis)$fd
-    
-    # Perform functional PCA extracting the top 2 components per marker
     fpca_res <- pca.fd(fd_obj, nharm = 2)
-    
-    # Append the PCA feature scores
     fpca_features <- cbind(fpca_features, fpca_res$scores)
   }
   
-  # Cluster the continuous functional space using traditional K-Means
   km_fpca <- kmeans(fpca_features, centers = 4, nstart = 25)
   ari4 <- ARI(trueClusIDs, km_fpca$cluster)
 
   # =====================================================
-  # METHOD 5: RankWalk GNN
+  # METHOD 5: RankWalk GNN (Switched to K-Means Clustering)
   # =====================================================
   cat("RankWalk GNN\n")
   res_gnn <- py$run_rankwalk_gnn(
@@ -248,33 +236,22 @@ for (ii in 1:n_iter) {
   subjects_unique <- sort(unique(SUBJ))
   n_subj <- length(subjects_unique)
 
-  nodes_by_subject <- lapply(subjects_unique, function(s) {
-    which(SUBJ == s)
-  })
+  # Aggregate time-step node embeddings into a single vector per subject (Mean Pooling)
+  emb_dim <- ncol(EMB)
+  subject_features <- matrix(0, nrow = n_subj, ncol = emb_dim)
 
-  Cosine_Sim <- EMB %*% t(EMB)
-  Cosine_Sim <- pmin(pmax(Cosine_Sim, -1), 1)
-  DIST_COS <- 1 - Cosine_Sim
-
-  S <- matrix(0, n_subj, n_subj)
-
-  for (a in seq_len(n_subj)) {
-    idx_a <- nodes_by_subject[[a]]
-    for (b in seq_len(n_subj)) {
-      idx_b <- nodes_by_subject[[b]]
-      block <- DIST_COS[idx_a, idx_b, drop = FALSE]
-      S[a, b] <- mean(block, na.rm = TRUE)
+  for (g in seq_len(n_subj)) {
+    idx <- which(SUBJ == subjects_unique[g])
+    if (length(idx) > 1) {
+      subject_features[g, ] <- colMeans(EMB[idx, , drop = FALSE], na.rm = TRUE)
+    } else if (length(idx) == 1) {
+      subject_features[g, ] <- EMB[idx, ]
     }
   }
 
-  diag(S) <- 0
-  S[is.na(S)] <- 1
-  S <- (S + t(S)) / 2
-  
-  hc <- hclust(as.dist(S), method = "ward.D2")
-  clusters <- cutree(hc, k = 4)
-
-  ari5 <- ARI(trueClusIDs, clusters)
+  # Execute K-Means clustering on the structural trajectory profiles
+  km_gnn <- kmeans(subject_features, centers = 4, nstart = 25)
+  ari5 <- ARI(trueClusIDs, km_gnn$cluster)
 
   # =====================================================
   # STORE RESULTS
