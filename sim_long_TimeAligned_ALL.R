@@ -28,51 +28,102 @@ py_run_string("
 import numpy as np
 import pandas as pd
 import torch
+
 from sklearn.cluster import KMeans
-from torch_geometric.utils import from_networkx, to_undirected
 
-from rankwalk import build_temporal_graph, train_gnn, compute_jaccard_fast
+from torch_geometric.utils import from_networkx
+from torch_geometric.utils import to_undirected
 
-def run_rankwalk_gnn(df,
-                     epochs=300,
-                     lr=1e-3,
-                     top_k=10,
-                     walk_length=20):
+from rankwalk import (
+    build_temporal_graph,
+    train_gnn,
+    compute_jaccard_fast
+)
+
+def run_rankwalk_gnn(
+    df,
+    epochs=300,
+    lr=1e-3,
+    top_k=10,
+    walk_length=20
+):
 
     df = pd.DataFrame(df)
-    G, labels_df = build_temporal_graph(df, k_similarity=10)
-    labels = np.array(labels_df['cluster']).ravel()
 
-    for u, v in G.edges():
-        G[u][v].clear()
+    G, labels_df = build_temporal_graph(
+        df,
+        k_similarity=10
+    )
 
     node_list = list(G.nodes())
 
-    data = from_networkx(G)
-    edge_index = to_undirected(data.edge_index)
+    device = torch.device(
+        'cuda' if torch.cuda.is_available()
+        else 'cpu'
+    )
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    edge_index = edge_index.to(device)
+    # -----------------------------------------
+    # Extract node features + time feature
+    # -----------------------------------------
+    x_list = []
+    time_list = []
 
-    x = torch.tensor(
-        np.array([G.nodes[n]['features'] for n in node_list]),
-        dtype=torch.float,
+    for n in node_list:
+        x_list.append(G.nodes[n]['features'])
+        time_list.append(G.nodes[n]['time'])
+
+    x = torch.tensor(np.array(x_list), dtype=torch.float, device=device)
+
+    time = torch.tensor(time_list, dtype=torch.float, device=device).unsqueeze(1)
+
+    # normalize time (important)
+    time = (time - time.mean()) / (time.std() + 1e-8)
+
+    # concatenate
+    x = torch.cat([x, time], dim=1)
+
+    # -----------------------------------------
+    # Build edge index + edge types
+    # -----------------------------------------
+    edges = []
+    edge_types = []
+
+    for u, v, attr in G.edges(data=True):
+
+        edges.append([u, v])
+        edge_types.append(attr['edge_type'])
+
+        edges.append([v, u])
+        edge_types.append(attr['edge_type'])
+
+    edge_index = torch.tensor(
+        edges,
+        dtype=torch.long,
+        device=device
+    ).t().contiguous()
+
+    edge_type = torch.tensor(
+        edge_types,
+        dtype=torch.long,
         device=device
     )
 
-    t = torch.tensor(
-        np.array([[G.nodes[n]['time']] for n in node_list]),
-        dtype=torch.float,
+    # -----------------------------------------
+    # Jaccard matrix
+    # -----------------------------------------
+    J = compute_jaccard_fast(
+        edge_index,
+        G.number_of_nodes(),
         device=device
     )
 
-    J = compute_jaccard_fast(edge_index, G.number_of_nodes())
-
-    #x = torch.cat([x, t], dim=1)
-
+    # -----------------------------------------
+    # Train model
+    # -----------------------------------------
     emb = train_gnn(
         x,
         edge_index,
+        edge_type,
         J,
         epochs=epochs,
         lr=lr,
@@ -82,7 +133,11 @@ def run_rankwalk_gnn(df,
     )
 
     emb = emb.detach().cpu().numpy()
-    node2subject = np.array([G.nodes[n]['subject'] for n in node_list])
+
+    node2subject = np.array([
+        G.nodes[n]['subject']
+        for n in node_list
+    ])
 
     return {
         'embeddings': emb,
@@ -231,7 +286,7 @@ for (ii in 1:n_iter) {
   # =====================================================
   cat("RankWalk GNN\n")
   res_gnn <- py$run_rankwalk_gnn(
-    Longdat2, epochs = 200L, lr = 0.001, top_k = 10L, walk_length = 20L
+    Longdat2, epochs = 100L, lr = 0.001, top_k = 10L, walk_length = 20L
   )
 
   EMB <- res_gnn$embeddings    
@@ -255,6 +310,7 @@ for (ii in 1:n_iter) {
   # Execute K-Means clustering on the structural trajectory profiles
   km_gnn <- kmeans(subject_features, centers = 4, nstart = 25)
   ari5 <- ARI(trueClusIDs, km_gnn$cluster)
+
 
   # =====================================================
   # STORE RESULTS
