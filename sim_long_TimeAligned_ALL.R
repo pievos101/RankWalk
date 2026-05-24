@@ -68,7 +68,7 @@ def run_rankwalk_gnn(df,
 
     J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 
-    x = torch.cat([x, t], dim=1)
+    #x = torch.cat([x, t], dim=1)
 
     emb = train_gnn(
         x,
@@ -231,7 +231,7 @@ for (ii in 1:n_iter) {
   # =====================================================
   cat("RankWalk GNN\n")
   res_gnn <- py$run_rankwalk_gnn(
-    Longdat2, epochs = 100L, lr = 0.001, top_k = 10L, walk_length = 20L
+    Longdat2, epochs = 200L, lr = 0.001, top_k = 10L, walk_length = 20L
   )
 
   EMB <- res_gnn$embeddings    
