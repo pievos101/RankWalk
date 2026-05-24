@@ -55,7 +55,7 @@ def train_gnn(x, edge_index, J, epochs=500, lr=1e-3, walk_length=10, top_k=5, de
     x, edge_index, J = x.to(device), edge_index.to(device), J.to(device)
     
     model = FeatureAwareGNN(in_dim=x.size(1), num_nodes=x.size(0), out_dim=48).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
 
     best_emb = None
     best_loss = float('inf')
