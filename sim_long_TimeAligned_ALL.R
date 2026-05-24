@@ -68,6 +68,8 @@ def run_rankwalk_gnn(df,
 
     J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 
+    x = torch.cat([x, t], dim=1)
+
     emb = train_gnn(
         x,
         edge_index,
