@@ -199,3 +199,163 @@ def build_temporal_graph(
                 )
 
     return G, patient_labels
+
+#### OTHERS!
+
+import numpy as np
+import networkx as nx
+from sklearn.preprocessing import StandardScaler
+
+TEMPORAL_EDGE = 0
+SIMILARITY_EDGE = 1
+
+
+# =========================================================
+# STABLE DISTANCE (kept, but used only for ranking)
+# =========================================================
+def stable_rank_distance(X):
+    d = np.linalg.norm(X[:, None, :] - X[None, :, :], axis=2)
+    return d
+
+
+# =========================================================
+# MUTUAL kNN MASK
+# =========================================================
+def mutual_knn_mask(D, k):
+    n = D.shape[0]
+
+    nn = np.argsort(D, axis=1)[:, 1:k+1]
+
+    mask = np.zeros((n, n), dtype=bool)
+
+    for i in range(n):
+        for j in nn[i]:
+            mask[i, j] = True
+
+    # mutual constraint
+    mutual = mask & mask.T
+    return mutual, nn
+
+
+# =========================================================
+# MAIN GRAPH BUILDER (ROBUST kNN VERSION)
+# =========================================================
+def build_temporal_graph_robust_knn(
+    df,
+    k_similarity=10
+):
+
+    df = df.copy()
+
+    # -----------------------------------------
+    # Wide format
+    # -----------------------------------------
+    wide = (
+        df.groupby(["subject", "time", "outcome"])["y"]
+        .mean()
+        .unstack("outcome")
+        .reset_index()
+        .sort_values(["subject", "time"])
+        .reset_index(drop=True)
+    )
+
+    feature_cols = [
+        c for c in wide.columns
+        if c not in ["subject", "time"]
+    ]
+
+    X = wide[feature_cols].values.astype(np.float32)
+
+    # -----------------------------------------
+    # Standardization
+    # -----------------------------------------
+    X = np.nan_to_num(X)
+    X = StandardScaler().fit_transform(X)
+
+    clip_val = 4
+    X = np.clip(X, -clip_val, clip_val)
+
+    # -----------------------------------------
+    # TIME FEATURE (kept)
+    # -----------------------------------------
+    t = wide["time"].values.astype(np.float32)
+    t = (t - t.mean()) / (t.std() + 1e-8)
+
+    X = np.concatenate([X, t.reshape(-1, 1)], axis=1)
+
+    # -----------------------------------------
+    # NODE SETUP
+    # -----------------------------------------
+    wide["node_id"] = np.arange(len(wide))
+
+    G = nx.Graph()
+
+    for i, row in wide.iterrows():
+        G.add_node(
+            row["node_id"],
+            subject=int(row["subject"]),
+            time=float(row["time"]),
+            features=X[i]
+        )
+
+    # -----------------------------------------
+    # TEMPORAL EDGES (UNCHANGED)
+    # -----------------------------------------
+    node_index = {
+        (r.subject, r.time): r.node_id
+        for _, r in wide.iterrows()
+    }
+
+    for subject in wide["subject"].unique():
+
+        sub = wide[wide["subject"] == subject].sort_values("time")
+
+        for t1, t2 in zip(sub["time"].values[:-1], sub["time"].values[1:]):
+
+            i = node_index[(subject, t1)]
+            j = node_index[(subject, t2)]
+
+            G.add_edge(
+                i, j,
+                edge_type=TEMPORAL_EDGE,
+                weight=1.0
+            )
+
+    # -----------------------------------------
+    # ROBUST kNN PER TIME SLICE
+    # -----------------------------------------
+    for tval in sorted(wide["time"].unique()):
+
+        idx = wide.index[wide["time"] == tval].to_numpy()
+
+        if len(idx) <= k_similarity:
+            continue
+
+        X_slice = X[idx]
+
+        # stable geometry
+        D = stable_rank_distance(X_slice)
+
+        mutual_mask, nn = mutual_knn_mask(D, k_similarity)
+
+        for i_local, i_global in enumerate(idx):
+
+            for j_local in nn[i_local]:
+
+                # enforce mutual constraint (IMPORTANT)
+                if not mutual_mask[i_local, j_local]:
+                    continue
+
+                j_global = idx[j_local]
+
+                # convert distance → weight (stable)
+                w = np.exp(-D[i_local, j_local])
+
+                G.add_edge(
+                    int(i_global),
+                    int(j_global),
+                    edge_type=SIMILARITY_EDGE,
+                    weight=float(w)
+                )
+
+    return G, None
