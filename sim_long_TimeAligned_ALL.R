@@ -58,9 +58,9 @@ def run_rankwalk_gnn(
     #    k_similarity=10
     #)
 
-    G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=5)
+    #G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=10)
 
-    #G, labels_df = build_temporal_graph_final(df, k_similarity=10)
+    G, labels_df = build_temporal_graph_final(df, k_similarity=10)
 
     #G, labels_df = build_temporal_graph_aligned(df, k_similarity=10, k_align=10)
 
