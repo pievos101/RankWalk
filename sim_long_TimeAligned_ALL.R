@@ -38,6 +38,7 @@ from rankwalk import (
     build_temporal_graph,
     build_temporal_graph_robust_knn,
     build_temporal_graph_final,
+    build_temporal_graph_aligned,
     train_gnn,
     compute_jaccard_fast
 )
@@ -57,9 +58,11 @@ def run_rankwalk_gnn(
     #    k_similarity=10
     #)
 
-    G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=5)
+    #G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=5)
 
     #G, labels_df = build_temporal_graph_final(df, k_similarity=10)
+
+    G, labels_df = build_temporal_graph_aligned(df, k_similarity=5, k_align=5)
 
     node_list = list(G.nodes())
 
@@ -173,9 +176,9 @@ for (ii in 1:n_iter) {
   cat("\n================ ITER", ii, "================\n")
 
   r_eta = 3 
-  r_sigma_diag = rep(3, 5) 
+  r_sigma_diag = rep(5, 5) 
   id = sample(1:5, 1)
-  r_sigma_diag[id] =  sample(3:20, 1)
+  #r_sigma_diag[id] =  sample(3:20, 1)
 
   print(r_sigma_diag)
 
