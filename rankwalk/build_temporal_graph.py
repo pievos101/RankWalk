@@ -654,3 +654,179 @@ def build_temporal_graph_final(
                 )
 
     return G, patient_labels
+
+####
+
+import numpy as np
+import networkx as nx
+from sklearn.preprocessing import StandardScaler
+
+TEMPORAL_EDGE = 0
+SIMILARITY_EDGE = 1
+
+
+# =========================================================
+# STABLE DISTANCE
+# =========================================================
+def stable_rank_distance(X):
+    return np.linalg.norm(X[:, None, :] - X[None, :, :], axis=2)
+
+
+# =========================================================
+# MUTUAL kNN
+# =========================================================
+def mutual_knn(D, k):
+    nn = np.argsort(D, axis=1)[:, 1:k+1]
+
+    mask = np.zeros_like(D, dtype=bool)
+    for i in range(D.shape[0]):
+        mask[i, nn[i]] = True
+
+    mutual = mask & mask.T
+    return nn, mutual
+
+
+# =========================================================
+# MAIN GRAPH BUILDER (UNIFIED TEMPORAL + ALIGNMENT)
+# =========================================================
+def build_temporal_graph_aligned(
+    df,
+    k_similarity=10,
+    k_align=5
+):
+
+    df = df.copy()
+
+    # -----------------------------------------
+    # WIDE FORMAT
+    # -----------------------------------------
+    wide = (
+        df.groupby(["subject", "time", "outcome"])["y"]
+        .mean()
+        .unstack("outcome")
+        .reset_index()
+        .sort_values(["subject", "time"])
+        .reset_index(drop=True)
+    )
+
+    feature_cols = [c for c in wide.columns if c not in ["subject", "time"]]
+    X = wide[feature_cols].values.astype(np.float32)
+
+    # -----------------------------------------
+    # STANDARDIZATION
+    # -----------------------------------------
+    X = np.nan_to_num(X)
+    X = StandardScaler().fit_transform(X)
+    X = np.clip(X, -4, 4)
+
+    # time feature
+    t = wide["time"].values.astype(np.float32)
+    t = (t - t.mean()) / (t.std() + 1e-8)
+
+    X = np.concatenate([X, t.reshape(-1, 1)], axis=1)
+
+    wide["node_id"] = np.arange(len(wide))
+
+    G = nx.Graph()
+
+    for i, row in wide.iterrows():
+        G.add_node(
+            row["node_id"],
+            subject=int(row["subject"]),
+            time=float(row["time"]),
+            features=X[i]
+        )
+
+    # =====================================================
+    # 1. TEMPORAL EDGES (subject continuity)
+    # =====================================================
+    node_index = {
+        (r.subject, r.time): r.node_id
+        for _, r in wide.iterrows()
+    }
+
+    for subject in wide["subject"].unique():
+
+        sub = wide[wide["subject"] == subject].sort_values("time")
+
+        for t1, t2 in zip(sub["time"].values[:-1], sub["time"].values[1:]):
+
+            i = node_index[(subject, t1)]
+            j = node_index[(subject, t2)]
+
+            G.add_edge(i, j, edge_type=TEMPORAL_EDGE, weight=1.0)
+
+    # =====================================================
+    # 2. WITHIN-TIME MUTUAL kNN (SIMILARITY EDGES)
+    # =====================================================
+    for tval in sorted(wide["time"].unique()):
+
+        idx = wide.index[wide["time"] == tval].to_numpy()
+        if len(idx) <= k_similarity:
+            continue
+
+        X_slice = X[idx]
+        D = stable_rank_distance(X_slice)
+
+        nn, mutual = mutual_knn(D, k_similarity)
+
+        for i_local, i_global in enumerate(idx):
+            for j_local in nn[i_local]:
+
+                if not mutual[i_local, j_local]:
+                    continue
+
+                j_global = idx[j_local]
+
+                w = np.exp(-D[i_local, j_local])
+
+                G.add_edge(
+                    int(i_global),
+                    int(j_global),
+                    edge_type=SIMILARITY_EDGE,
+                    weight=float(w)
+                )
+
+    # =====================================================
+    # 3. CROSS-TIME ALIGNMENT (ADDED INTO TEMPORAL EDGES)
+    # =====================================================
+    time_values = sorted(wide["time"].unique())
+
+    for t1, t2 in zip(time_values[:-1], time_values[1:]):
+
+        idx1 = wide.index[wide["time"] == t1].to_numpy()
+        idx2 = wide.index[wide["time"] == t2].to_numpy()
+
+        if len(idx1) == 0 or len(idx2) == 0:
+            continue
+
+        X1, X2 = X[idx1], X[idx2]
+
+        sim = X1 @ X2.T
+        sim /= (
+            np.linalg.norm(X1, axis=1, keepdims=True) *
+            np.linalg.norm(X2, axis=1, keepdims=True).T + 1e-8
+        )
+
+        # forward + backward mutuality across time
+        nn_fwd = np.argsort(sim, axis=1)[:, -k_align:]
+        nn_bwd = np.argsort(sim.T, axis=1)[:, -k_align:]
+
+        for i_local, i_global in enumerate(idx1):
+
+            for j_local in nn_fwd[i_local]:
+
+                # mutual cross-time condition
+                if i_local not in nn_bwd[j_local]:
+                    continue
+
+                j_global = idx2[j_local]
+
+                G.add_edge(
+                    int(i_global),
+                    int(j_global),
+                    edge_type=TEMPORAL_EDGE,  # IMPORTANT: absorbed into temporal
+                    weight=float(sim[i_local, j_local])
+                )
+
+    return G, None
