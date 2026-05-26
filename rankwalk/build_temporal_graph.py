@@ -359,3 +359,298 @@ def build_temporal_graph_robust_knn(
                 )
 
     return G, None
+
+###
+# ANOTHER ONE
+#####
+
+import numpy as np
+import networkx as nx
+
+from scipy.spatial.distance import pdist, squareform
+from sklearn.preprocessing import StandardScaler
+
+
+TEMPORAL_EDGE = 0
+SIMILARITY_EDGE = 1
+
+
+# =========================================================
+# ROBUST SUBSPACE DISTANCE
+# =========================================================
+def _final_robust_distance_matrix(
+    X,
+    n_subspaces=5,
+    subspace_ratio=0.7
+):
+
+    n, p = X.shape
+
+    subspace_size = max(
+        2,
+        int(np.floor(subspace_ratio * p))
+    )
+
+    dist_accum = np.zeros((n, n), dtype=np.float32)
+
+    for _ in range(n_subspaces):
+
+        # -----------------------------------------
+        # Random feature subspace
+        # -----------------------------------------
+        feat_idx = np.random.choice(
+            p,
+            size=subspace_size,
+            replace=False
+        )
+
+        X_sub = X[:, feat_idx]
+
+        # -----------------------------------------
+        # Euclidean distances in subspace
+        # -----------------------------------------
+        d = squareform(
+            pdist(X_sub, metric="euclidean")
+        )
+
+        # -----------------------------------------
+        # Rank-transform distances
+        # (VERY important for robustness)
+        # -----------------------------------------
+        ranked = (
+            d.ravel()
+            .argsort()
+            .argsort()
+            .reshape(d.shape)
+            .astype(np.float32)
+        )
+
+        dist_accum += ranked
+
+    # averaged robust distance
+    return dist_accum / n_subspaces
+
+
+# =========================================================
+# MUTUAL kNN
+# =========================================================
+def _final_mutual_knn_mask(
+    D,
+    k
+):
+
+    n = D.shape[0]
+
+    nn = np.argsort(
+        D,
+        axis=1
+    )[:, 1:k + 1]
+
+    mask = np.zeros(
+        (n, n),
+        dtype=bool
+    )
+
+    for i in range(n):
+
+        for j in nn[i]:
+
+            mask[i, j] = True
+
+    # -----------------------------------------
+    # Mutual agreement
+    # -----------------------------------------
+    mutual = mask & mask.T
+
+    return mutual, nn
+
+
+# =========================================================
+# FINAL GRAPH BUILDER
+# =========================================================
+def build_temporal_graph_final(
+    df,
+    k_similarity=10,
+    n_subspaces=5,
+    subspace_ratio=0.7
+):
+
+    df = df.copy()
+
+    # =====================================================
+    # WIDE FORMAT
+    # =====================================================
+    wide = (
+        df.groupby(
+            ["subject", "time", "outcome"]
+        )["y"]
+        .mean()
+        .unstack("outcome")
+        .reset_index()
+        .sort_values(["subject", "time"])
+        .reset_index(drop=True)
+    )
+
+    feature_cols = [
+        c for c in wide.columns
+        if c not in ["subject", "time"]
+    ]
+
+    X = wide[feature_cols].values.astype(np.float32)
+
+    # =====================================================
+    # STANDARDIZATION
+    # =====================================================
+    X = np.nan_to_num(X)
+
+    X = StandardScaler().fit_transform(X)
+
+    clip_val = 4
+
+    X = np.clip(
+        X,
+        -clip_val,
+        clip_val
+    )
+
+    # =====================================================
+    # EXPLICIT TIME FEATURE
+    # =====================================================
+    time_values = (
+        wide["time"]
+        .values
+        .astype(np.float32)
+    )
+
+    time_scaled = (
+        (time_values - time_values.mean()) /
+        (time_values.std() + 1e-8)
+    ).reshape(-1, 1)
+
+    X = np.concatenate(
+        [X, time_scaled],
+        axis=1
+    )
+
+    # =====================================================
+    # NODE IDS
+    # =====================================================
+    wide["node_id"] = np.arange(len(wide))
+
+    patient_labels = (
+        df[["subject", "cluster"]]
+        .drop_duplicates()
+        .sort_values("subject")
+    )
+
+    # =====================================================
+    # GRAPH INITIALIZATION
+    # =====================================================
+    G = nx.Graph()
+
+    for i, row in wide.iterrows():
+
+        G.add_node(
+            row["node_id"],
+            subject=int(row["subject"]),
+            time=float(row["time"]),
+            features=X[i]
+        )
+
+    # =====================================================
+    # TEMPORAL EDGES
+    # =====================================================
+    node_index = {
+        (r.subject, r.time): r.node_id
+        for _, r in wide.iterrows()
+    }
+
+    for subject in wide["subject"].unique():
+
+        sub = (
+            wide[
+                wide["subject"] == subject
+            ]
+            .sort_values("time")
+        )
+
+        for t1, t2 in zip(
+            sub["time"].values[:-1],
+            sub["time"].values[1:]
+        ):
+
+            i = node_index[(subject, t1)]
+            j = node_index[(subject, t2)]
+
+            G.add_edge(
+                i,
+                j,
+                edge_type=TEMPORAL_EDGE,
+                weight=1.0
+            )
+
+    # =====================================================
+    # ROBUST MUTUAL kNN GRAPH
+    # =====================================================
+    for t in sorted(wide["time"].unique()):
+
+        slice_idx = (
+            wide.index[
+                wide["time"] == t
+            ]
+            .to_numpy()
+        )
+
+        if len(slice_idx) <= k_similarity:
+            continue
+
+        X_slice = X[slice_idx]
+
+        # -----------------------------------------
+        # Robust subspace distance
+        # -----------------------------------------
+        D = _final_robust_distance_matrix(
+            X_slice,
+            n_subspaces=n_subspaces,
+            subspace_ratio=subspace_ratio
+        )
+
+        # -----------------------------------------
+        # Mutual kNN
+        # -----------------------------------------
+        mutual_mask, nn = _final_mutual_knn_mask(
+            D,
+            k_similarity
+        )
+
+        # -----------------------------------------
+        # Build similarity graph
+        # -----------------------------------------
+        for i_local, i_global in enumerate(slice_idx):
+
+            for j_local in nn[i_local]:
+
+                # IMPORTANT:
+                # keep only mutual neighbors
+                if not mutual_mask[i_local, j_local]:
+                    continue
+
+                j_global = slice_idx[j_local]
+
+                # ---------------------------------
+                # Stable similarity weight
+                # ---------------------------------
+                w = np.exp(
+                    -D[i_local, j_local] /
+                    (D.std() + 1e-8)
+                )
+
+                G.add_edge(
+                    int(i_global),
+                    int(j_global),
+                    edge_type=SIMILARITY_EDGE,
+                    weight=float(w),
+                    time=float(t)
+                )
+
+    return G, patient_labels
