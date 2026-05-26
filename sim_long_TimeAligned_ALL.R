@@ -37,6 +37,7 @@ from torch_geometric.utils import to_undirected
 from rankwalk import (
     build_temporal_graph,
     build_temporal_graph_robust_knn,
+    build_temporal_graph_final,
     train_gnn,
     compute_jaccard_fast
 )
@@ -56,7 +57,9 @@ def run_rankwalk_gnn(
     #    k_similarity=10
     #)
 
-    G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=10)
+    #G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=10)
+
+    G, labels_df = build_temporal_graph_final(df, k_similarity=10)
 
     node_list = list(G.nodes())
 
