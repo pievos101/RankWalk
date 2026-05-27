@@ -53,15 +53,16 @@ def run_rankwalk_gnn(
 
     df = pd.DataFrame(df)
 
-    #G, labels_df = build_temporal_graph(
-    #    df,
-    #    k_similarity=10
-    #)
+    G, labels_df = build_temporal_graph(
+        df,
+        k_similarity=10
+    )
 
-    G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=10)
+    #G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=10)
 
     #G, labels_df = build_temporal_graph_final(df, k_similarity=10)
 
+    # The cross edges hurt 
     #G, labels_df = build_temporal_graph_aligned(df, k_similarity=10, k_align=10)
 
     node_list = list(G.nodes())
@@ -175,10 +176,10 @@ for (ii in 1:n_iter) {
 
   cat("\n================ ITER", ii, "================\n")
 
-  r_eta = 5 
+  r_eta = 3 
   r_sigma_diag = rep(5, 5) 
   id = sample(1:5, 1)
-  #r_sigma_diag[id] =  sample(3:20, 1)
+  r_sigma_diag[id] =  sample(5:20, 1)
 
   print(r_sigma_diag)
 
