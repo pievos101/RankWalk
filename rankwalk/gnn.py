@@ -104,6 +104,16 @@ class FeatureAwareRGNN(nn.Module):
 
         return F.normalize(h, dim=1)
 
+def apply_edge_dropout(edge_index, edge_type, p=0.2):
+    keep_mask = torch.ones(edge_index.size(1), dtype=torch.bool, device=edge_index.device)
+
+    sim_mask = (edge_type == SIMILARITY_EDGE)
+
+    dropout_mask = torch.rand(sim_mask.sum(), device=edge_index.device) > p
+
+    keep_mask[sim_mask] = dropout_mask
+
+    return edge_index[:, keep_mask], edge_type[keep_mask]
 
 def train_gnn(
     x,
@@ -140,15 +150,24 @@ def train_gnn(
 
         optimizer.zero_grad()
 
+        # -----------------------------------------
+        # EDGE DROPOUT (HERE)
+        # -----------------------------------------
+        edge_index_d, edge_type_d = apply_edge_dropout(
+            edge_index,
+            edge_type,
+            p=0.1  # start small: 5–15%
+        )
+
         emb = model(
             x,
-            edge_index,
-            edge_type
+            edge_index_d,
+            edge_type_d
         )
 
         pos_pairs = sample_pos_pairs_start_anchor(
             J,
-            edge_index,
+            edge_index_d,
             x.size(0),
             walk_length,
             top_k
