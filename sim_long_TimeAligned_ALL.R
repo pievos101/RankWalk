@@ -185,26 +185,26 @@ for (ii in 1:n_iter) {
   r_eta = 3 
   r_sigma_diag = rep(5, 5) 
   id = sample(1:5, 1)
-  #r_sigma_diag[id] =  sample(3:20, 1)
+  #r_sigma_diag[id] =  sample(5:20, 1)
 
   print(r_sigma_diag)
 
   # SIM1
-  #Longdat2 <- simLongData(
-  #  ranTimes = FALSE,
-  #  n_i = 10,
-  #  eta = r_eta,
-  #  sigma_diag = r_sigma_diag
-  #)
+  Longdat2 <- simLongData(
+    ranTimes = FALSE,
+    n_i = 10,
+    eta = r_eta,
+    sigma_diag = r_sigma_diag
+  )
 
   # SIM2
-  Longdat2 <- simGraphFriendlyData(
-    n_total = 200,
-    K = 4,
-    outcomes = 5,
-    eta = 5,
-    ranTimes = FALSE
-  )
+  #Longdat2 <- simGraphFriendlyData(
+  #  n_total = 200,
+  #  K = 4,
+  #  outcomes = 5,
+  #  eta = 5,
+  #  ranTimes = FALSE
+  #)
 
   Longdat2_wide <- reshape(
     Longdat2,
