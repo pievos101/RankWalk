@@ -153,21 +153,21 @@ def train_gnn(
         # -----------------------------------------
         # EDGE DROPOUT (HERE)
         # -----------------------------------------
-        edge_index_d, edge_type_d = apply_edge_dropout(
-            edge_index,
-            edge_type,
-            p=0.1  # start small: 5–15%
-        )
+        #edge_index_d, edge_type_d = apply_edge_dropout(
+        #    edge_index,
+        #    edge_type,
+        #    p=0.1  # start small: 5–15%
+        #)
 
         emb = model(
             x,
-            edge_index_d,
-            edge_type_d
+            edge_index,
+            edge_type
         )
 
         pos_pairs = sample_pos_pairs_start_anchor(
             J,
-            edge_index_d,
+            edge_index,
             x.size(0),
             walk_length,
             top_k
