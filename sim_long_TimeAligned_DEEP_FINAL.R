@@ -173,7 +173,7 @@ for (ii in 1:n_iter) {
 
   cat("\n================ ITER", ii, "================\n")
 
-  r_eta = 3
+  r_eta = 5
   r_sigma_diag = rep(5, 5)
   print(r_sigma_diag)
 
@@ -354,5 +354,5 @@ for (ii in 1:n_iter) {
   # =====================================================
   RES[ii,] <- c(ari1, ari2, ari3, ari4, ari5, ari6, ari7)
 
-  print(RES)
+  print(RES[,2:7])
 }
