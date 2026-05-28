@@ -1,102 +1,99 @@
-simLongData_GNN <- function(
-  n_total = 200,
-  K = 4,
-  outcomes = 5,
-  eta = 4,
-  n_i = 10
+simGraphFriendlyData <- function(
+    n_total = 200,
+    K = 4,
+    outcomes = 5,
+    eta = 0.5,
+    ranTimes = TRUE
 ){
 
   library(MASS)
 
-  # -----------------------------------------------------
-  # TIME GRID
-  # -----------------------------------------------------
-  time_grid <- seq(0, 11, length.out = n_i)
+  cluster_sizes <- rep(n_total / K, K)
 
-  # -----------------------------------------------------
-  # CLUSTER-SPECIFIC LATENT TRAJECTORY SHAPES
-  # (IMPORTANT: weak marginal separation)
-  # -----------------------------------------------------
-  base_shape <- list(
-    function(t) sin(t/2),
-    function(t) cos(t/3),
-    function(t) 0.3 * t,
-    function(t) -0.2 * t + sin(t)
+  sim_data <- list()
+  subject_id <- 1
+
+  # =====================================================
+  # OUTCOME-SPECIFIC DYNAMICS DEFINITIONS
+  # =====================================================
+
+  outcome_fns <- list(
+
+    # Outcome 1: smooth drift (easy / FPCA-friendly)
+    function(t, k){
+      if(k == 1) 8*t - 0.5*t^2
+      else if(k == 2) 6*t - 0.3*t^2
+      else if(k == 3) 4*t - 0.2*t^2
+      else 5*t
+    },
+
+    # Outcome 2: abrupt regime shift (hard for smooth models)
+    function(t, k){
+      base <- ifelse(t < 6, 0, -12)
+      base + k * 0.5
+    },
+
+    # Outcome 3: oscillatory / cyclic
+    function(t, k){
+      sin(t + k) * 5 + cos(t/2) * 2
+    },
+
+    # Outcome 4: branching + curvature differences
+    function(t, k){
+      if(k %in% c(1,2)){
+        -0.8*t
+      } else {
+        -2*t + 0.3*t^2
+      }
+    },
+
+    # Outcome 5: noisy nonlinear interaction
+    function(t, k){
+      (t - 5)^2 * (ifelse(k == 4, 2, 1)) - 10 + rnorm(1, 0, 0.5)
+    }
   )
 
-  # -----------------------------------------------------
-  # CROSS-OUTCOME MIXING MATRIX (KEY INNOVATION)
-  # -----------------------------------------------------
-  A_list <- list(
-    matrix(c(
-      1, 0.2, 0.1, 0, 0,
-      0.2, 1, 0.2, 0.1, 0,
-      0.1, 0.2, 1, 0.2, 0.1,
-      0, 0.1, 0.2, 1, 0.2,
-      0, 0, 0.1, 0.2, 1
-    ), 5, 5, byrow = TRUE),
+  # =====================================================
+  # SIMULATION LOOP
+  # =====================================================
 
-    matrix(c(
-      1, 0.4, 0, 0.2, 0,
-      0.4, 1, 0.3, 0, 0.1,
-      0, 0.3, 1, 0.2, 0,
-      0.2, 0, 0.2, 1, 0.3,
-      0, 0.1, 0, 0.3, 1
-    ), 5, 5, byrow = TRUE),
+  for(k in 1:K){
 
-    matrix(c(
-      1, 0, 0.3, 0.2, 0.1,
-      0, 1, 0.2, 0.3, 0,
-      0.3, 0.2, 1, 0.1, 0.2,
-      0.2, 0.3, 0.1, 1, 0,
-      0.1, 0, 0.2, 0, 1
-    ), 5, 5, byrow = TRUE),
+    for(i in 1:cluster_sizes[k]){
 
-    matrix(c(
-      1, 0.1, 0.2, 0.3, 0,
-      0.1, 1, 0.2, 0, 0.3,
-      0.2, 0.2, 1, 0.1, 0,
-      0.3, 0, 0.1, 1, 0.2,
-      0, 0.3, 0, 0.2, 1
-    ), 5, 5, byrow = TRUE)
-  )
+      if(ranTimes){
+        n_i <- sample(5:12, 1)
+        times <- sort(c(0, runif(n_i - 1, 0.5, 11)))
+      } else {
+        n_i <- 10
+        times <- seq(0, 11, length.out = n_i)
+      }
 
-  # -----------------------------------------------------
-  # STORAGE
-  # -----------------------------------------------------
-  out <- list()
-  id <- 1
+      # subject warping (IMPORTANT)
+      delta_i <- runif(1, -1, 1) # before -2, 2
+      warped_time <- times - delta_i
 
-  for (k in 1:K) {
+      # random effect
+      u_i <- MASS::mvrnorm(
+        1,
+        mu = rep(0, outcomes),
+        Sigma = diag(rep(0.5, outcomes))
+      )
 
-    A <- A_list[[k]]
+      for(j in seq_along(times)){
+        t <- warped_time[j]
 
-    for (i in 1:(n_total / K)) {
+        for(h in 1:outcomes){
 
-      u_i <- rnorm(outcomes, sd = 1)
+          mu <- outcome_fns[[h]](t, k)
 
-      for (j in 1:n_i) {
-
-        t <- time_grid[j]
-
-        latent <- sapply(base_shape, function(f) f(t))
-
-        # cluster deformation via matrix coupling
-        mu <- A %*% latent
-
-        # subject random trajectory distortion
-        subject_traj <- 0.5 * sin(t + rnorm(1))
-
-        for (h in 1:outcomes) {
-
-          y <- mu[h] +
-               subject_traj +
+          y <- mu +
                u_i[h] +
-               rnorm(1, sd = eta)
+               rnorm(1, 0, eta)
 
-          out[[length(out) + 1]] <- data.frame(
-            subject = id,
-            time = t,
+          sim_data[[length(sim_data) + 1]] <- data.frame(
+            subject = subject_id,
+            time = times[j],
             outcome = h,
             y = y,
             cluster = k
@@ -104,9 +101,97 @@ simLongData_GNN <- function(
         }
       }
 
-      id <- id + 1
+      subject_id <- subject_id + 1
     }
   }
 
-  do.call(rbind, out)
+  do.call(rbind, sim_data)
+}
+
+#' Plot Graph-Friendly Multivariate Longitudinal Trajectories (base R only)
+#'
+#' @param data Data frame from simGraphFriendlyData()
+#' @return ggplot object
+#'
+#' @import ggplot2
+#' @export
+
+plot_graph_trajectories <- function(data){
+
+  library(ggplot2)
+
+  # ---------------------------------------------------
+  # format outcome labels
+  # ---------------------------------------------------
+
+  data$outcome <- factor(
+    data$outcome,
+    labels = paste0("Y", sort(unique(data$outcome)))
+  )
+
+  data$cluster <- factor(data$cluster)
+
+  # ---------------------------------------------------
+  # compute cluster means WITHOUT dplyr
+  # ---------------------------------------------------
+
+  uniq_keys <- unique(data[, c("cluster", "outcome", "time")])
+
+  avg_list <- vector("list", nrow(uniq_keys))
+
+  for(i in seq_len(nrow(uniq_keys))){
+
+    cl <- uniq_keys$cluster[i]
+    ou <- uniq_keys$outcome[i]
+    tm <- uniq_keys$time[i]
+
+    idx <- which(
+      data$cluster == cl &
+      data$outcome == ou &
+      data$time == tm
+    )
+
+    avg_list[[i]] <- data.frame(
+      cluster = cl,
+      outcome = ou,
+      time = tm,
+      mean_y = mean(data$y[idx])
+    )
+  }
+
+  avg_data <- do.call(rbind, avg_list)
+
+  # ---------------------------------------------------
+  # plot
+  # ---------------------------------------------------
+
+  ggplot(data, aes(x = time, y = y, color = cluster)) +
+
+    geom_line(
+      aes(group = subject),
+      alpha = 0.2,
+      linewidth = 0.3
+    ) +
+
+    geom_smooth(
+      method = "loess",
+      se = FALSE,
+      linewidth = 1.5
+    ) +
+
+    facet_wrap(~ outcome, scales = "free_y") +
+
+    theme_minimal(base_size = 14) +
+
+    labs(
+      title = "Graph-Friendly Nonlinear Longitudinal Trajectories",
+      subtitle = "Irregular + asynchronous + branching dynamics",
+      x = "Time",
+      y = "Outcome Value",
+      color = "Cluster"
+    ) +
+
+    scale_color_brewer(palette = "Dark2") +
+
+    theme(legend.position = "bottom")
 }
