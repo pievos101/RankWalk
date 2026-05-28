@@ -307,72 +307,63 @@ for (ii in 1:n_iter) {
   km_fpca <- kmeans(fpca_features, centers = 4, nstart = 25)
   ari4 <- ARI(trueClusIDs, km_fpca$cluster)
 
-# =====================================================
-# METHOD 5: RankWalk GNN (Flatten + PCA version)
-# =====================================================
-cat("RankWalk GNN (Flatten + PCA)\n")
+  # =====================================================
+  # METHOD 5: RankWalk GNN (Flattening - FULL SIGNAL)
+  # =====================================================
+  cat("RankWalk GNN (Flattening)\n")
 
-res_gnn <- py$run_rankwalk_gnn(
-  Longdat2,
-  epochs = 100L,
-  lr = 0.001,
-  top_k = 10L,
-  walk_length = 20L
-)
-
-EMB  <- res_gnn$embeddings
-SUBJ <- as.numeric(res_gnn$subjects)
-
-subjects_unique <- sort(unique(SUBJ))
-n_subj <- length(subjects_unique)
-
-# -----------------------------------------------------
-# IMPORTANT: align time with embeddings
-# -----------------------------------------------------
-TIME <- Longdat2$time
-
-# -----------------------------------------------------
-# FLATTEN embeddings per subject (time-ordered)
-# -----------------------------------------------------
-subject_features_list <- vector("list", n_subj)
-
-for (g in seq_len(n_subj)) {
-
-  idx <- which(SUBJ == subjects_unique[g])
-
-  # enforce temporal ordering
-  idx <- idx[order(TIME[idx])]
-
-  # flatten: (T × d) -> vector
-  subject_features_list[[g]] <- as.vector(
-    t(EMB[idx, , drop = FALSE])
+  res_gnn <- py$run_rankwalk_gnn(
+    Longdat2,
+    epochs = 100L,
+    lr = 0.001,
+    top_k = 10L,
+    walk_length = 20L
   )
-}
 
-subject_features <- do.call(rbind, subject_features_list)
+  EMB  <- res_gnn$embeddings
+  SUBJ <- as.numeric(res_gnn$subjects)
 
-# -----------------------------------------------------
-# PCA (retain 95% variance)
-# -----------------------------------------------------
-subject_features <- scale(subject_features)
+  subjects_unique <- sort(unique(SUBJ))
+  n_subj <- length(subjects_unique)
 
-pca_res <- prcomp(subject_features, center = TRUE, scale. = FALSE)
+  # -----------------------------------------------------
+  # ALIGN TIME (IMPORTANT)
+  # -----------------------------------------------------
+  TIME <- Longdat2$time
 
-var_exp <- cumsum(pca_res$sdev^2) / sum(pca_res$sdev^2)
-k_95 <- which(var_exp >= 0.95)[1]
+  # -----------------------------------------------------
+  # FLATTEN TRAJECTORIES (NO INFORMATION LOSS VIA AVERAGING)
+  # -----------------------------------------------------
+  subject_features_list <- vector("list", n_subj)
 
-cat("PCA components retained:", k_95, "\n")
+  for (g in seq_len(n_subj)) {
 
-subject_pcs <- pca_res$x[, 1:k_95, drop = FALSE]
+    idx <- which(SUBJ == subjects_unique[g])
 
-# -----------------------------------------------------
-# K-means clustering
-# -----------------------------------------------------
-km_gnn <- kmeans(subject_features, centers = 4, nstart = 25)
+    # enforce temporal ordering (important for consistency)
+    idx <- idx[order(TIME[idx])]
 
-ari5 <- ARI(trueClusIDs, km_gnn$cluster)
+    # FLATTEN: preserves full trajectory signal
+    subject_features_list[[g]] <- as.vector(
+      t(EMB[idx, , drop = FALSE])
+    )
+  }
 
-cat("ARI (RankWalk GNN + Flatten + PCA):", ari5, "\n")
+  subject_features <- do.call(rbind, subject_features_list)
+
+  # -----------------------------------------------------
+  # OPTIONAL: scale (recommended for k-means stability)
+  # -----------------------------------------------------
+  subject_features <- scale(subject_features)
+
+  # -----------------------------------------------------
+  # K-MEANS ON FULL TRAJECTORY REPRESENTATION
+  # -----------------------------------------------------
+  km_gnn <- kmeans(subject_features, centers = 4, nstart = 25)
+
+  ari5 <- ARI(trueClusIDs, km_gnn$cluster)
+
+  cat("ARI (RankWalk GNN + Flattening):", ari5, "\n")
 
 
   # =====================================================
