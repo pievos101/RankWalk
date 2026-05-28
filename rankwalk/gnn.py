@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch_geometric.nn import RGCNConv
+from torch_geometric.nn import GCNConv
 
 from .contrastive import (
     sample_pos_pairs_start_anchor,
@@ -41,17 +42,20 @@ class FeatureAwareRGNN(nn.Module):
         # -----------------------------------------
         # Relation-aware graph convolutions
         # -----------------------------------------
-        self.conv1 = RGCNConv(
-            hidden_dim,
-            hidden_dim,
-            num_relations=num_relations
-        )
+        #self.conv1 = RGCNConv(
+        #    hidden_dim,
+        #    hidden_dim,
+        #    num_relations=num_relations
+        #)
 
-        self.conv2 = RGCNConv(
-            hidden_dim,
-            hidden_dim,
-            num_relations=num_relations
-        )
+        #self.conv2 = RGCNConv(
+        #    hidden_dim,
+        #    hidden_dim,
+        #    num_relations=num_relations
+        #)
+
+        self.conv1 = GCNConv(hidden_dim, hidden_dim)
+        self.conv2 = GCNConv(hidden_dim, hidden_dim)
 
         # -----------------------------------------
         # Post-processing
@@ -83,10 +87,15 @@ class FeatureAwareRGNN(nn.Module):
         # -----------------------------------------
         # Relation-aware propagation
         # -----------------------------------------
-        h = self.conv1(h, edge_index, edge_type)
+        #h = self.conv1(h, edge_index, edge_type)
+        #h = F.relu(h)
+
+        #h = self.conv2(h, edge_index, edge_type)
+
+        h = self.conv1(h, edge_index)
         h = F.relu(h)
 
-        h = self.conv2(h, edge_index, edge_type)
+        h = self.conv2(h, edge_index)
 
         # -----------------------------------------
         # Residual connection
