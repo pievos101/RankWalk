@@ -673,13 +673,15 @@ def stable_rank_distance(X):
 
 
 # =========================================================
-# MUTUAL kNN
+# MUTUAL kNN (FIXED + CLEAN)
 # =========================================================
 def mutual_knn(D, k):
     nn = np.argsort(D, axis=1)[:, 1:k+1]
 
-    mask = np.zeros_like(D, dtype=bool)
-    for i in range(D.shape[0]):
+    n = D.shape[0]
+    mask = np.zeros((n, n), dtype=bool)
+
+    for i in range(n):
         mask[i, nn[i]] = True
 
     mutual = mask & mask.T
@@ -687,12 +689,13 @@ def mutual_knn(D, k):
 
 
 # =========================================================
-# MAIN GRAPH BUILDER (UNIFIED TEMPORAL + ALIGNMENT)
+# MAIN GRAPH BUILDER (NOW WITH KNN MODE SWITCH)
 # =========================================================
 def build_temporal_graph_aligned(
     df,
     k_similarity=10,
-    k_align=5
+    k_align=5,
+    knn_mode="mutual"   # <<<<<< NEW PARAMETER
 ):
 
     df = df.copy()
@@ -757,7 +760,7 @@ def build_temporal_graph_aligned(
             G.add_edge(i, j, edge_type=TEMPORAL_EDGE, weight=1.0)
 
     # =====================================================
-    # 2. WITHIN-TIME MUTUAL kNN (SIMILARITY EDGES)
+    # 2. WITHIN-TIME kNN (SWITCHABLE)
     # =====================================================
     for tval in sorted(wide["time"].unique()):
 
@@ -771,10 +774,15 @@ def build_temporal_graph_aligned(
         nn, mutual = mutual_knn(D, k_similarity)
 
         for i_local, i_global in enumerate(idx):
+
             for j_local in nn[i_local]:
 
-                if not mutual[i_local, j_local]:
-                    continue
+                # -----------------------------------------
+                # MODE SWITCH
+                # -----------------------------------------
+                if knn_mode == "mutual":
+                    if not mutual[i_local, j_local]:
+                        continue
 
                 j_global = idx[j_local]
 
@@ -788,7 +796,7 @@ def build_temporal_graph_aligned(
                 )
 
     # =====================================================
-    # 3. CROSS-TIME ALIGNMENT (ADDED INTO TEMPORAL EDGES)
+    # 3. CROSS-TIME ALIGNMENT (UNCHANGED)
     # =====================================================
     time_values = sorted(wide["time"].unique())
 
@@ -808,7 +816,6 @@ def build_temporal_graph_aligned(
             np.linalg.norm(X2, axis=1, keepdims=True).T + 1e-8
         )
 
-        # forward + backward mutuality across time
         nn_fwd = np.argsort(sim, axis=1)[:, -k_align:]
         nn_bwd = np.argsort(sim.T, axis=1)[:, -k_align:]
 
@@ -816,7 +823,6 @@ def build_temporal_graph_aligned(
 
             for j_local in nn_fwd[i_local]:
 
-                # mutual cross-time condition
                 if i_local not in nn_bwd[j_local]:
                     continue
 
@@ -825,7 +831,7 @@ def build_temporal_graph_aligned(
                 G.add_edge(
                     int(i_global),
                     int(j_global),
-                    edge_type=TEMPORAL_EDGE,  # IMPORTANT: absorbed into temporal
+                    edge_type=TEMPORAL_EDGE,
                     weight=float(sim[i_local, j_local])
                 )
 
