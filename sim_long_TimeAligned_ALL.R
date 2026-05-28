@@ -53,17 +53,21 @@ def run_rankwalk_gnn(
 
     df = pd.DataFrame(df)
 
-    G, labels_df = build_temporal_graph(
-        df,
-        k_similarity=10
-    )
-
+    ##################################
+    #G, labels_df = build_temporal_graph(
+    #    df,
+    #    k_similarity=10
+    #)
     #G, labels_df = build_temporal_graph_robust_knn(df, k_similarity=10)
-
     #G, labels_df = build_temporal_graph_final(df, k_similarity=10)
+    #############################################
 
-    # The cross edges hurt 
-    #G, labels_df = build_temporal_graph_aligned(df, k_similarity=10, k_align=10)
+    # cross-edges kNN
+    G, labels_df = build_temporal_graph_aligned(
+        df, 
+        k_similarity=10, 
+        k_align=10,
+        knn_mode = 'mutual') # mutual or knn
 
     node_list = list(G.nodes())
 
@@ -198,7 +202,7 @@ for (ii in 1:n_iter) {
     n_total = 200,
     K = 4,
     outcomes = 5,
-    eta = 0.5,
+    eta = 5,
     ranTimes = FALSE
   )
 
@@ -303,35 +307,72 @@ for (ii in 1:n_iter) {
   km_fpca <- kmeans(fpca_features, centers = 4, nstart = 25)
   ari4 <- ARI(trueClusIDs, km_fpca$cluster)
 
-  # =====================================================
-  # METHOD 5: RankWalk GNN (Switched to K-Means Clustering)
-  # =====================================================
-  cat("RankWalk GNN\n")
-  res_gnn <- py$run_rankwalk_gnn(
-    Longdat2, epochs = 100L, lr = 0.001, top_k = 10L, walk_length = 20L
+# =====================================================
+# METHOD 5: RankWalk GNN (Flatten + PCA version)
+# =====================================================
+cat("RankWalk GNN (Flatten + PCA)\n")
+
+res_gnn <- py$run_rankwalk_gnn(
+  Longdat2,
+  epochs = 100L,
+  lr = 0.001,
+  top_k = 10L,
+  walk_length = 20L
+)
+
+EMB  <- res_gnn$embeddings
+SUBJ <- as.numeric(res_gnn$subjects)
+
+subjects_unique <- sort(unique(SUBJ))
+n_subj <- length(subjects_unique)
+
+# -----------------------------------------------------
+# IMPORTANT: align time with embeddings
+# -----------------------------------------------------
+TIME <- Longdat2$time
+
+# -----------------------------------------------------
+# FLATTEN embeddings per subject (time-ordered)
+# -----------------------------------------------------
+subject_features_list <- vector("list", n_subj)
+
+for (g in seq_len(n_subj)) {
+
+  idx <- which(SUBJ == subjects_unique[g])
+
+  # enforce temporal ordering
+  idx <- idx[order(TIME[idx])]
+
+  # flatten: (T × d) -> vector
+  subject_features_list[[g]] <- as.vector(
+    t(EMB[idx, , drop = FALSE])
   )
+}
 
-  EMB <- res_gnn$embeddings    
-  SUBJ <- as.numeric(res_gnn$subjects)
-  subjects_unique <- sort(unique(SUBJ))
-  n_subj <- length(subjects_unique)
+subject_features <- do.call(rbind, subject_features_list)
 
-  # Aggregate time-step node embeddings into a single vector per subject (Mean Pooling)
-  emb_dim <- ncol(EMB)
-  subject_features <- matrix(0, nrow = n_subj, ncol = emb_dim)
+# -----------------------------------------------------
+# PCA (retain 95% variance)
+# -----------------------------------------------------
+subject_features <- scale(subject_features)
 
-  for (g in seq_len(n_subj)) {
-    idx <- which(SUBJ == subjects_unique[g])
-    if (length(idx) > 1) {
-      subject_features[g, ] <- colMeans(EMB[idx, , drop = FALSE], na.rm = TRUE)
-    } else if (length(idx) == 1) {
-      subject_features[g, ] <- EMB[idx, ]
-    }
-  }
+pca_res <- prcomp(subject_features, center = TRUE, scale. = FALSE)
 
-  # Execute K-Means clustering on the structural trajectory profiles
-  km_gnn <- kmeans(subject_features, centers = 4, nstart = 25)
-  ari5 <- ARI(trueClusIDs, km_gnn$cluster)
+var_exp <- cumsum(pca_res$sdev^2) / sum(pca_res$sdev^2)
+k_95 <- which(var_exp >= 0.95)[1]
+
+cat("PCA components retained:", k_95, "\n")
+
+subject_pcs <- pca_res$x[, 1:k_95, drop = FALSE]
+
+# -----------------------------------------------------
+# K-means clustering
+# -----------------------------------------------------
+km_gnn <- kmeans(subject_features, centers = 4, nstart = 25)
+
+ari5 <- ARI(trueClusIDs, km_gnn$cluster)
+
+cat("ARI (RankWalk GNN + Flatten + PCA):", ari5, "\n")
 
 
   # =====================================================
