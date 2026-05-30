@@ -35,7 +35,8 @@ import torch.nn.functional as F
 from rankwalk import (
     build_temporal_graph_aligned,
     train_gnn,
-    compute_jaccard_fast
+    compute_jaccard_fast,
+    build_temporal_graph
 )
 
 # =========================================================
@@ -45,11 +46,16 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 
     df = pd.DataFrame(df)
 
-    G, _ = build_temporal_graph_aligned(
+    #G, _ = build_temporal_graph_aligned(
+    #    df,
+    #    k_similarity=10,
+    #    k_align=10,
+    #    knn_mode='knn'
+    #)
+
+    G, labels_df = build_temporal_graph(
         df,
-        k_similarity=10,
-        k_align=10,
-        knn_mode='mutual'
+        k_similarity=5
     )
 
     node_list = list(G.nodes())
@@ -173,18 +179,27 @@ for (ii in 1:n_iter) {
 
   cat("\n================ ITER", ii, "================\n")
 
-  r_eta = 3
+  r_eta = 5
   r_sigma_diag = rep(5, 5)
   id = sample(1:5, 1)
-  r_sigma_diag[id] =  sample(5:20, 1)
+  #r_sigma_diag[id] =  sample(3:20, 1)
   print(r_sigma_diag)
 
-  Longdat2 <- simLongData(
-    ranTimes = FALSE,
-    n_i = 10,
-    eta = r_eta,
-    sigma_diag = r_sigma_diag
+  #Longdat2 <- simLongData(
+  #  ranTimes = FALSE,
+  #  n_i = 10,
+  #  eta = r_eta,
+  #  sigma_diag = r_sigma_diag
+  #)
+
+  # SIM2
+  Longdat2 <- simClinicalGraphData(
+    n_total = 200,
+    K = 4,
+    outcomes = 5,
+    eta = 4
   )
+
 
   Longdat2_wide <- reshape(
     Longdat2,
@@ -213,7 +228,7 @@ for (ii in 1:n_iter) {
     verbose = 0,
     n_trees = 500,
     method = "ward.D2",
-    n_features = NA,
+    n_features = NaN,
     do.leveling = TRUE,
     pca_selection = "first"
   )
@@ -230,7 +245,7 @@ for (ii in 1:n_iter) {
     verbose = 0,
     n_trees = 500,
     method = "ward.D2",
-    n_features = NA,
+    n_features = NaN,
     do.leveling = TRUE,
     pca_selection = "random_weighted"
   )
@@ -358,3 +373,126 @@ for (ii in 1:n_iter) {
 
   print(RES[,2:7])
 }
+
+
+# =========================================================
+# PLOT RESULTS
+# =========================================================
+RES_df <- as.data.frame(RES)
+RES_m <- melt(RES_df)
+colnames(RES_m) = c("Method", "value")
+
+ggplot(RES_m, aes(x = Method, y = value, fill = Method)) +
+  geom_boxplot() +
+  ylim(0,1) +
+  theme_minimal() +
+  xlab("Method") +
+  ylab("Adjusted Rand Index (ARI)") +
+  theme(
+    text = element_text(size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+# =========================================================
+# PAIRWISE DOMINANCE HEATMAP (TIES EXCLUDED)
+# =========================================================
+
+library(ggplot2)
+library(reshape2)
+
+methods <- colnames(RES)
+n_methods <- length(methods)
+
+DOM <- matrix(
+  0,
+  nrow = n_methods,
+  ncol = n_methods
+)
+
+rownames(DOM) <- methods
+colnames(DOM) <- methods
+
+# =========================================================
+# COMPUTE PAIRWISE WIN RATES (EXCLUDING TIES)
+# =========================================================
+
+for(i in 1:n_methods){
+
+  for(j in 1:n_methods){
+
+    if(i == j){
+
+      DOM[i,j] <- NA
+
+    } else {
+
+      wins <- sum(RES[,i] > RES[,j], na.rm = TRUE)
+      losses <- sum(RES[,i] < RES[,j], na.rm = TRUE)
+      total <- wins + losses   # ties excluded
+
+      if(total == 0){
+        DOM[i,j] <- NA
+      } else {
+        DOM[i,j] <- wins / total
+      }
+    }
+  }
+}
+
+# =========================================================
+# MELT FOR GGPLOT
+# =========================================================
+
+DOM_m <- melt(DOM)
+
+colnames(DOM_m) <- c(
+  "Method1",
+  "Method2",
+  "WinRate"
+)
+
+# =========================================================
+# HEATMAP
+# =========================================================
+
+p <- ggplot(
+  DOM_m,
+  aes(
+    x = Method1,
+    y = Method2,
+    fill = WinRate
+  )
+) +
+
+  geom_tile(color = "white") +
+
+  geom_text(
+    aes(label = ifelse(is.na(WinRate), "", round(WinRate, 2))),
+    size = 4
+  ) +
+
+  scale_fill_gradient2(
+    low = "firebrick",
+    mid = "white",
+    high = "darkgreen",
+    midpoint = 0.5,
+    na.value = "grey90",
+    limits = c(0,1)
+  ) +
+
+  theme_minimal() +
+
+  xlab("") +
+  ylab("") +
+
+  ggtitle(
+    "Pairwise dominance matrix \nP(Method1 beats Method2)"
+  ) +
+
+  theme(
+    text = element_text(size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+print(p)
