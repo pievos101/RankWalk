@@ -58,6 +58,9 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
         k_similarity=5
     )
 
+    print(len(G.nodes))
+    print(len(G.edges))
+
     node_list = list(G.nodes())
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -179,26 +182,26 @@ for (ii in 1:n_iter) {
 
   cat("\n================ ITER", ii, "================\n")
 
-  r_eta = 5
-  r_sigma_diag = rep(5, 5)
+  r_eta = 3
+  r_sigma_diag = rep(3, 5)
   id = sample(1:5, 1)
-  #r_sigma_diag[id] =  sample(3:20, 1)
+  r_sigma_diag[id] =  sample(5:20, 1)
   print(r_sigma_diag)
 
-  #Longdat2 <- simLongData(
-  #  ranTimes = FALSE,
-  #  n_i = 10,
-  #  eta = r_eta,
-  #  sigma_diag = r_sigma_diag
-  #)
+  Longdat2 <- simLongData(
+    ranTimes = FALSE,
+    n_i = 10,
+    eta = r_eta,
+    sigma_diag = r_sigma_diag
+  )
 
   # SIM2
-  Longdat2 <- simClinicalGraphData(
-    n_total = 200,
-    K = 4,
-    outcomes = 5,
-    eta = 4
-  )
+  #Longdat2 <- simClinicalGraphData(
+  #  n_total = 200,
+  #  K = 4,
+  #  outcomes = 5,
+  #  eta = 4
+  #)
 
 
   Longdat2_wide <- reshape(
