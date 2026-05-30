@@ -200,6 +200,141 @@ def build_temporal_graph(
 
     return G, patient_labels
 
+import numpy as np
+import networkx as nx
+from sklearn.preprocessing import StandardScaler
+import pandas as pd
+
+TEMPORAL_EDGE = 0
+SIMILARITY_EDGE = 1
+
+
+import numpy as np
+import pandas as pd
+import networkx as nx
+from sklearn.preprocessing import StandardScaler
+
+TEMPORAL_EDGE = 0
+SIMILARITY_EDGE = 1
+
+
+def build_temporal_graph_visit_based(df, k_similarity=10):
+
+    df = df.copy()
+
+    # =====================================================
+    # STEP 1: SORT (keep true irregular time)
+    # =====================================================
+    df = df.sort_values(["subject", "time"]).copy()
+
+    # =====================================================
+    # STEP 2: ONE ROW PER (subject, time, outcome)
+    # =====================================================
+    # ensure no duplicates
+    df = (
+        df.groupby(["subject", "time", "outcome"], as_index=False)["y"]
+        .mean()
+    )
+
+    # =====================================================
+    # STEP 3: WIDE FORMAT -> ONE NODE PER (subject, time)
+    # =====================================================
+    wide = (
+        df.pivot_table(
+            index=["subject", "time"],
+            columns="outcome",
+            values="y",
+            aggfunc="mean"
+        )
+        .reset_index()
+    )
+
+    # =====================================================
+    # STEP 4: FEATURE MATRIX (outcomes only)
+    # =====================================================
+    feature_cols = [c for c in wide.columns if c not in ["subject", "time"]]
+
+    X = wide[feature_cols].values.astype(np.float32)
+    X = np.nan_to_num(X)
+
+    X = StandardScaler().fit_transform(X)
+
+    # =====================================================
+    # STEP 5: BUILD GRAPH
+    # =====================================================
+    G = nx.Graph()
+
+    wide = wide.sort_values(["subject", "time"]).reset_index(drop=True)
+    wide["node_id"] = np.arange(len(wide))
+
+    node_index = {
+        (r.subject, r.time): r.node_id
+        for r in wide.itertuples()
+    }
+
+    # -----------------------------------------------------
+    # nodes
+    # -----------------------------------------------------
+    for i, row in wide.iterrows():
+        G.add_node(
+            int(row.node_id),
+            subject=int(row.subject),
+            time=float(row.time),      # IMPORTANT: irregular time preserved
+            features=X[i]
+        )
+
+    # =====================================================
+    # STEP 6: TEMPORAL EDGES (REAL TIME ORDER, NOT VISIT)
+    # =====================================================
+    for subject in wide["subject"].unique():
+
+        sub = wide[wide["subject"] == subject].sort_values("time")
+
+        for i in range(len(sub) - 1):
+
+            a = node_index[(sub.iloc[i].subject, sub.iloc[i].time)]
+            b = node_index[(sub.iloc[i + 1].subject, sub.iloc[i + 1].time)]
+
+            G.add_edge(a, b, edge_type=TEMPORAL_EDGE)
+
+    # =====================================================
+    # STEP 7: SIMILARITY EDGES (OPTIONAL, SAME TIME BATCH)
+    # =====================================================
+    for t in wide["time"].unique():
+
+        idx = wide.index[wide["time"] == t].to_numpy()
+
+        if len(idx) <= k_similarity:
+            continue
+
+        Xv = X[idx]
+
+        Xv = Xv / (np.linalg.norm(Xv, axis=1, keepdims=True) + 1e-8)
+
+        dist = 1 - Xv @ Xv.T
+
+        for i_local, i_global in enumerate(idx):
+
+            nn = np.argsort(dist[i_local])[1:k_similarity + 1]
+
+            for j_local in nn:
+
+                G.add_edge(
+                    int(i_global),
+                    int(idx[j_local]),
+                    edge_type=SIMILARITY_EDGE
+                )
+
+    # =====================================================
+    # FINAL CHECK (CRITICAL)
+    # =====================================================
+    assert G.number_of_nodes() == len(wide), "Node mismatch detected!"
+
+    print("nodes:", G.number_of_nodes())
+    print("expected:", len(wide))
+
+    return G, wide
+
 #### OTHERS!
 
 import numpy as np
