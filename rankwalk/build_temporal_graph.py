@@ -357,6 +357,190 @@ def build_temporal_graph_grid(
 
     return G, wide
 
+
+import numpy as np
+import pandas as pd
+import networkx as nx
+
+from sklearn.preprocessing import StandardScaler
+
+TEMPORAL_EDGE = 0
+SIMILARITY_EDGE = 1
+
+
+# =====================================================
+# ROBUST SUBSPACE CONSENSUS DISTANCE (KEY FIX)
+# =====================================================
+def robust_subspace_similarity(X, n_subspaces=5, subspace_ratio=0.7, tau=1.0):
+
+    n, p = X.shape
+    k = max(2, int(np.floor(subspace_ratio * p)))
+
+    S_accum = np.zeros((n, n), dtype=np.float32)
+
+    for _ in range(n_subspaces):
+
+        feat_idx = np.random.choice(p, k, replace=False)
+        Xs = X[:, feat_idx]
+
+        # cosine similarity (more stable under noise than Euclidean)
+        norm = np.linalg.norm(Xs, axis=1, keepdims=True) + 1e-8
+        Xs = Xs / norm
+
+        S = Xs @ Xs.T
+        S_accum += S
+
+    S = S_accum / n_subspaces
+
+    # temperature sharpening
+    S = np.exp(S / tau)
+
+    return S
+
+
+# =====================================================
+# MAIN GRAPH BUILDER (VERSION 2)
+# =====================================================
+def build_temporal_graph_grid2(
+    df,
+    n_bins=10,
+    k_similarity=10,
+    n_subspaces=5,
+    subspace_ratio=0.7,
+    tau=1.0
+):
+
+    df = df.copy()
+
+    # =====================================================
+    # STEP 1: QUANTILE BINNING (IRREGULAR TIME SAFE)
+    # =====================================================
+    df["visit"] = pd.qcut(
+        df["time"].rank(method="first"),
+        q=n_bins,
+        labels=False
+    ).astype(int)
+
+    # =====================================================
+    # STEP 2: AGGREGATE REAL OBSERVATIONS ONLY
+    # =====================================================
+    df = (
+        df.groupby(["subject", "visit", "outcome"], as_index=False)
+        .agg(y=("y", "mean"))
+    )
+
+    # =====================================================
+    # STEP 3: WIDE FORMAT (NO FAKE NODES)
+    # =====================================================
+    wide = (
+        df.pivot_table(
+            index=["subject", "visit"],
+            columns="outcome",
+            values="y",
+            aggfunc="mean"
+        )
+        .reset_index()
+    )
+
+    # =====================================================
+    # STEP 4: FEATURES (NO TIME IN FEATURES)
+    # =====================================================
+    feature_cols = [
+        c for c in wide.columns
+        if c not in ["subject", "visit"]
+    ]
+
+    X = wide[feature_cols].values.astype(np.float32)
+    X = np.nan_to_num(X)
+
+    X = StandardScaler().fit_transform(X)
+    X = np.clip(X, -4, 4)
+
+    # =====================================================
+    # STEP 5: GRAPH INIT
+    # =====================================================
+    G = nx.Graph()
+
+    wide = wide.sort_values(["subject", "visit"]).reset_index(drop=True)
+    wide["node_id"] = np.arange(len(wide))
+
+    node_index = {
+        (r.subject, r.visit): r.node_id
+        for r in wide.itertuples()
+    }
+
+    # =====================================================
+    # ADD NODES
+    # =====================================================
+    for i, row in wide.iterrows():
+
+        G.add_node(
+            int(row.node_id),
+            subject=int(row.subject),
+            visit=int(row.visit),
+            features=X[i]
+        )
+
+    # =====================================================
+    # STEP 6: TEMPORAL EDGES (STRUCTURE ONLY)
+    # =====================================================
+    subjects = wide["subject"].unique()
+
+    for s in subjects:
+
+        sub = wide[wide.subject == s].sort_values("visit")
+
+        for i in range(len(sub) - 1):
+
+            u = node_index[(s, sub.iloc[i].visit)]
+            v = node_index[(s, sub.iloc[i + 1].visit)]
+
+            G.add_edge(
+                u,
+                v,
+                edge_type=TEMPORAL_EDGE
+            )
+
+    # =====================================================
+    # STEP 7: ROBUST SIMILARITY EDGES (SUBSPACE CONSENSUS)
+    # =====================================================
+    for v in sorted(wide["visit"].unique()):
+
+        idx = wide.index[wide["visit"] == v].to_numpy()
+
+        if len(idx) <= k_similarity:
+            continue
+
+        Xv = X[idx]
+
+        # 🔥 KEY FIX: robust similarity
+        S = robust_subspace_similarity(
+            Xv,
+            n_subspaces=n_subspaces,
+            subspace_ratio=subspace_ratio,
+            tau=tau
+        )
+
+        for i_local, i_global in enumerate(idx):
+
+            nn = np.argsort(S[i_local])[::-1][1:k_similarity + 1]
+
+            for j_local in nn:
+
+                G.add_edge(
+                    int(i_global),
+                    int(idx[j_local]),
+                    edge_type=SIMILARITY_EDGE,
+                    weight=float(S[i_local, j_local]),
+                    visit=int(v)
+                )
+
+    print("nodes:", G.number_of_nodes())
+
+    return G, wide
+
+
+
 #### OTHERS!
 
 import numpy as np

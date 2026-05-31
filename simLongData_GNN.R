@@ -1,3 +1,194 @@
+simLongData_GNN_friendly <- function(
+  n_total = 200,
+  K = 4,
+  outcomes = 5,
+  eta = 2,
+  n_i = 10
+){
+
+  library(MASS)
+
+  sim_data <- list()
+  subject_id <- 1
+
+  # ---------------------------------------------
+  # GLOBAL latent regime structure (VERY IMPORTANT)
+  # ---------------------------------------------
+  n_regimes <- 6
+  regime_centers <- matrix(
+    rnorm(n_regimes * outcomes, 0, 5),
+    nrow = n_regimes
+  )
+
+  # regime transition probs (random walk in discrete space)
+  P <- matrix(runif(n_regimes^2), n_regimes)
+  P <- P / rowSums(P)
+
+  for (k in 1:K) {
+
+    for (i in 1:(n_total / K)) {
+
+      # -----------------------------------------
+      # subject-specific regime path
+      # -----------------------------------------
+      state <- sample(1:n_regimes, 1)
+
+      times <- sort(runif(n_i, 0, 10))
+
+      subject_bias <- rnorm(outcomes, 0, 1.5)
+
+      for (t in 1:n_i) {
+
+        # regime transition (Markov chain)
+        state <- sample(1:n_regimes, 1, prob = P[state, ])
+
+        for (h in 1:outcomes) {
+
+          mu <- regime_centers[state, h]
+
+          # -------------------------------------
+          # KEY: NO smooth trajectory anymore
+          # -------------------------------------
+          y <- mu +
+            subject_bias[h] +
+            rnorm(1, 0, eta)
+
+          sim_data[[length(sim_data) + 1]] <- data.frame(
+            subject = subject_id,
+            time = times[t],
+            outcome = h,
+            y = y,
+            cluster = k
+          )
+        }
+      }
+
+      subject_id <- subject_id + 1
+    }
+  }
+
+  do.call(rbind, sim_data)
+}
+
+
+
+simLongData_GNN_strong = function(
+  n_total = 200,
+  K = 4,
+  outcomes = 5,
+  ranTimes = TRUE,
+  sigma_diag = rep(3, 5),
+  eta = 3
+){
+
+  library(MASS)
+
+  # -----------------------------
+  # base mean structure (weak)
+  # -----------------------------
+  mean_functions <- list(
+    function(t) sin(t/2),
+    function(t) cos(t/3),
+    function(t) 0.2*t,
+    function(t) -0.1*t^2,
+    function(t) log(t + 1)
+  )
+
+  # -----------------------------
+  # hidden regime drift (CRITICAL)
+  # -----------------------------
+  regime_effect <- function(t, r){
+    if (r == 1) return(  3*sin(t) )
+    if (r == 2) return( -3*cos(t) )
+    if (r == 3) return(  2*t )
+    return(-2*t)
+  }
+
+  # -----------------------------
+  # covariance
+  # -----------------------------
+  R <- diag(outcomes)
+  Sigma_sigma <- diag(sigma_diag) %*% R %*% diag(sigma_diag)
+
+  sim_data <- list()
+  subject_id <- 1
+
+  # -----------------------------
+  # global latent "environment states"
+  # (this is what FPCA CANNOT capture)
+  # -----------------------------
+  global_env <- function(t){
+    sin(t / 2) + 0.5 * sin(3*t)
+  }
+
+  for (k in 1:K){
+
+    for (i in 1:(n_total / K)){
+
+      if (ranTimes){
+        n_i <- sample(6:15, 1)
+        times <- sort(runif(n_i, 0, 10))
+      } else {
+        n_i <- 12
+        times <- seq(0, 10, length.out = n_i)
+      }
+
+      u_i <- mvrnorm(1, rep(0, outcomes), Sigma_sigma)
+
+      # subject-specific coupling strength
+      gamma_i <- runif(1, 0.5, 2.5)
+
+      for (j in 1:n_i){
+
+        t <- times[j]
+
+        # hidden regime (nonlinear, shared structure)
+        r_t <- sample(1:4, 1, prob = c(
+          0.4 + 0.3*sin(t),
+          0.2,
+          0.2,
+          0.2
+        ))
+
+        env_t <- global_env(t)
+
+        for (h in 1:outcomes){
+
+          # -----------------------------
+          # TRUE DATA GENERATING PROCESS
+          # -----------------------------
+          mu <- mean_functions[[h]](t)
+
+          # interaction term (CRUCIAL)
+          coupling <- gamma_i * env_t * sin(t + k)
+
+          # regime distortion (breaks smooth FPCA structure)
+          regime <- regime_effect(t, r_t)
+
+          y <- mu +
+               u_i[h] +
+               coupling +
+               regime +
+               rnorm(1, 0, eta * (1 + abs(env_t)))
+
+          sim_data[[length(sim_data) + 1]] <- data.frame(
+            subject = subject_id,
+            time = t,
+            outcome = h,
+            y = y,
+            cluster = k,
+            regime = r_t
+          )
+        }
+      }
+
+      subject_id <- subject_id + 1
+    }
+  }
+
+  do.call(rbind, sim_data)
+}
+
 simClinicalGraphData <- function(
     n_total = 200,
     K = 4,

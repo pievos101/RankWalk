@@ -37,7 +37,8 @@ from rankwalk import (
     train_gnn,
     compute_jaccard_fast,
     build_temporal_graph,
-    build_temporal_graph_grid
+    build_temporal_graph_grid,
+    build_temporal_graph_grid2
 )
 
 # =========================================================
@@ -70,14 +71,14 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 
     for n in node_list:
         x_list.append(G.nodes[n]['features'])
-        t_list.append(G.nodes[n]['time'])
+        #t_list.append(G.nodes[n]['time'])
 
     x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
 
-    t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
-    t = (t - t.mean()) / (t.std() + 1e-8)
+    #t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
+    #t = (t - t.mean()) / (t.std() + 1e-8)
 
-    x = torch.cat([x, t], dim=1)
+    #x = torch.cat([x, t], dim=1)
 
     edges, et = [], []
 
@@ -181,8 +182,8 @@ for (ii in 1:n_iter) {
 
   r_eta = 3
   r_sigma_diag = rep(5, 5)
-  id = sample(1:5, 1)
-  r_sigma_diag[id] = sample(5:20, 1)
+  #id = sample(1:5, 1)
+  #r_sigma_diag[id] = sample(5:20, 1)
 
   print(r_sigma_diag)
 
@@ -192,6 +193,8 @@ for (ii in 1:n_iter) {
     eta = r_eta,
     sigma_diag = r_sigma_diag
   )
+
+  #Longdat2 = simLongData_GNN_friendly()
 
   # =====================================================
   # WIDE FORMAT
