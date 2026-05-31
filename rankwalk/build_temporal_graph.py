@@ -222,11 +222,18 @@ def build_temporal_graph_grid(
     # =====================================================
     # QUANTILE TIME GRID
     # =====================================================
-    df["visit"] = pd.qcut(
-        df["time"].rank(method="first"),
-        q=n_bins,
+    #df["visit"] = pd.qcut(
+    #    df["time"].rank(method="first"),
+    #    q=n_bins,
+    #    labels=False
+    #).astype(int)
+
+    # UNIFORM
+    df["visit"] = pd.cut(
+        df["time"],
+        bins=n_bins,
         labels=False
-    ).astype(int)
+    )
 
     # =====================================================
     # AGGREGATION (REAL OBS ONLY)
