@@ -269,7 +269,7 @@ for (m in 1:outcomes) {
   }
 
   # IMPORTANT: scores rows correspond to Ly order
-  colnames(scores) <- paste0("PC", 1:2, "_m", m)
+  colnames(scores) <- paste0("PC", 1:dim(scores)[2], "_m", m)
 
   # ---------------------------------------------
   # initialize / align feature matrix
