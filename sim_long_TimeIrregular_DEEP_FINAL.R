@@ -37,7 +37,7 @@ from rankwalk import (
     train_gnn,
     compute_jaccard_fast,
     build_temporal_graph,
-    build_temporal_graph_visit_based
+    build_temporal_graph_grid
 )
 
 # =========================================================
@@ -54,7 +54,7 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
     #    knn_mode='knn'
     #)
 
-    G, labels_df = build_temporal_graph_visit_based(
+    G, labels_df = build_temporal_graph_grid(
         df,
         k_similarity=5
     )
@@ -179,9 +179,9 @@ for (ii in 1:n_iter) {
   cat("\n================ ITER", ii, "================\n")
 
   r_eta = 3
-  r_sigma_diag = rep(5, 5)
-  #id = sample(1:5, 1)
-  #r_sigma_diag[id] = sample(5:20, 1)
+  r_sigma_diag = rep(3, 5)
+  id = sample(1:5, 1)
+  r_sigma_diag[id] = sample(5:20, 1)
 
   print(r_sigma_diag)
 
