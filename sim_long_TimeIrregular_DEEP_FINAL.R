@@ -56,7 +56,8 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 
     G, labels_df = build_temporal_graph_grid(
         df,
-        k_similarity=5
+        k_similarity=5,
+        n_bins=10
     )
 
     print(len(G.nodes))
@@ -179,7 +180,7 @@ for (ii in 1:n_iter) {
   cat("\n================ ITER", ii, "================\n")
 
   r_eta = 3
-  r_sigma_diag = rep(3, 5)
+  r_sigma_diag = rep(5, 5)
   id = sample(1:5, 1)
   r_sigma_diag[id] = sample(5:20, 1)
 
