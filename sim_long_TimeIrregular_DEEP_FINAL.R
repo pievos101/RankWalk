@@ -260,8 +260,12 @@ for (m in 1:outcomes) {
     Lt = Lt,
     optns = list(dataType = "Sparse", nRegGrid = 51)
   )
-
-  scores <- fpca_res$xiEst[, 1:2, drop = FALSE]
+  
+  if(fpca_res$selectK == 1){
+    scores <- fpca_res$xiEst[, 1, drop = FALSE]  
+  }else{
+    scores <- fpca_res$xiEst[, 1:2, drop = FALSE]
+  }
 
   # IMPORTANT: scores rows correspond to Ly order
   colnames(scores) <- paste0("PC", 1:2, "_m", m)
