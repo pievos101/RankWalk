@@ -201,47 +201,72 @@ def build_temporal_graph(
     return G, patient_labels
 
 import numpy as np
-import networkx as nx
-from sklearn.preprocessing import StandardScaler
-import pandas as pd
-
-TEMPORAL_EDGE = 0
-SIMILARITY_EDGE = 1
-
-
-import numpy as np
 import pandas as pd
 import networkx as nx
+
 from sklearn.preprocessing import StandardScaler
 
 TEMPORAL_EDGE = 0
 SIMILARITY_EDGE = 1
 
-
-def build_temporal_graph_visit_based(df, k_similarity=10):
+def build_temporal_graph_grid(
+    df,
+    n_bins=10,
+    k_similarity=10
+):
 
     df = df.copy()
 
     # =====================================================
-    # STEP 1: SORT (keep true irregular time)
+    # STEP 1: CREATE GLOBAL TIME GRID
     # =====================================================
-    df = df.sort_values(["subject", "time"]).copy()
 
-    # =====================================================
-    # STEP 2: ONE ROW PER (subject, time, outcome)
-    # =====================================================
-    # ensure no duplicates
-    df = (
-        df.groupby(["subject", "time", "outcome"], as_index=False)["y"]
-        .mean()
+    t_min = float(df["time"].min())
+    t_max = float(df["time"].max())
+
+    bins = np.linspace(
+        t_min,
+        t_max,
+        n_bins + 1
+    )
+
+    df["visit"] = pd.cut(
+        df["time"],
+        bins=bins,
+        labels=False,
+        include_lowest=True
+    )
+
+    df["visit"] = np.clip(
+        df["visit"],
+        0,
+        n_bins - 1
     )
 
     # =====================================================
-    # STEP 3: WIDE FORMAT -> ONE NODE PER (subject, time)
+    # STEP 2: COLLAPSE MULTIPLE OBSERVATIONS
+    # WITHIN SAME SUBJECT × VISIT × OUTCOME
     # =====================================================
+
+    df = (
+        df.groupby(
+            ["subject", "visit", "outcome"],
+            as_index=False
+        )
+        .agg(
+            y=("y", "mean"),
+            time=("time", "mean")
+        )
+    )
+
+    # =====================================================
+    # STEP 3: WIDE FORMAT
+    # ONE ROW = ONE NODE
+    # =====================================================
+
     wide = (
         df.pivot_table(
-            index=["subject", "time"],
+            index=["subject", "visit"],
             columns="outcome",
             values="y",
             aggfunc="mean"
@@ -249,89 +274,221 @@ def build_temporal_graph_visit_based(df, k_similarity=10):
         .reset_index()
     )
 
-    # =====================================================
-    # STEP 4: FEATURE MATRIX (outcomes only)
-    # =====================================================
-    feature_cols = [c for c in wide.columns if c not in ["subject", "time"]]
+    time_map = (
+        df.groupby(
+            ["subject", "visit"],
+            as_index=False
+        )["time"]
+        .mean()
+    )
 
-    X = wide[feature_cols].values.astype(np.float32)
-    X = np.nan_to_num(X)
-
-    X = StandardScaler().fit_transform(X)
+    wide = wide.merge(
+        time_map,
+        on=["subject", "visit"],
+        how="left"
+    )
 
     # =====================================================
-    # STEP 5: BUILD GRAPH
+    # STEP 4: FORCE COMPLETE GRID
     # =====================================================
+
+    subjects = np.sort(
+        df["subject"].unique()
+    )
+
+    full_index = pd.MultiIndex.from_product(
+        [subjects, np.arange(n_bins)],
+        names=["subject", "visit"]
+    )
+
+    wide = (
+        wide.set_index(
+            ["subject", "visit"]
+        )
+        .reindex(full_index)
+        .reset_index()
+    )
+
+    # =====================================================
+    # FILL MISSING TIMES WITH BIN CENTERS
+    # =====================================================
+
+    bin_centers = (
+        bins[:-1] + bins[1:]
+    ) / 2
+
+    wide["time"] = wide["time"].fillna(
+        wide["visit"].map(
+            dict(enumerate(bin_centers))
+        )
+    )
+
+    # =====================================================
+    # STEP 5: FEATURE MATRIX
+    # =====================================================
+
+    feature_cols = [
+        c for c in wide.columns
+        if c not in [
+            "subject",
+            "visit",
+            "time"
+        ]
+    ]
+
+    X_out = wide[
+        feature_cols
+    ].values.astype(np.float32)
+
+    X_out = np.nan_to_num(X_out)
+
+    X_out = StandardScaler().fit_transform(
+        X_out
+    )
+
+    X_out = np.clip(
+        X_out,
+        -4,
+        4
+    )
+
+    # -----------------------------------------------------
+    # Add actual time as feature
+    # -----------------------------------------------------
+
+    time_scaled = (
+        (
+            wide["time"].values
+            - wide["time"].mean()
+        )
+        /
+        (
+            wide["time"].std()
+            + 1e-8
+        )
+    ).reshape(-1, 1)
+
+    X = np.concatenate(
+        [X_out, time_scaled],
+        axis=1
+    )
+
+    # =====================================================
+    # STEP 6: GRAPH
+    # =====================================================
+
     G = nx.Graph()
 
-    wide = wide.sort_values(["subject", "time"]).reset_index(drop=True)
-    wide["node_id"] = np.arange(len(wide))
+    wide["node_id"] = np.arange(
+        len(wide)
+    )
 
     node_index = {
-        (r.subject, r.time): r.node_id
+        (r.subject, r.visit): r.node_id
         for r in wide.itertuples()
     }
 
     # -----------------------------------------------------
-    # nodes
+    # Nodes
     # -----------------------------------------------------
+
     for i, row in wide.iterrows():
+
         G.add_node(
             int(row.node_id),
             subject=int(row.subject),
-            time=float(row.time),      # IMPORTANT: irregular time preserved
+            visit=int(row.visit),
+            time=float(row.time),
             features=X[i]
         )
 
     # =====================================================
-    # STEP 6: TEMPORAL EDGES (REAL TIME ORDER, NOT VISIT)
+    # STEP 7: TEMPORAL EDGES
     # =====================================================
-    for subject in wide["subject"].unique():
 
-        sub = wide[wide["subject"] == subject].sort_values("time")
+    for subject in subjects:
 
-        for i in range(len(sub) - 1):
+        sub = (
+            wide[
+                wide.subject == subject
+            ]
+            .sort_values("visit")
+        )
 
-            a = node_index[(sub.iloc[i].subject, sub.iloc[i].time)]
-            b = node_index[(sub.iloc[i + 1].subject, sub.iloc[i + 1].time)]
+        for v in range(
+            len(sub) - 1
+        ):
 
-            G.add_edge(a, b, edge_type=TEMPORAL_EDGE)
+            i = node_index[
+                (
+                    subject,
+                    sub.iloc[v].visit
+                )
+            ]
+
+            j = node_index[
+                (
+                    subject,
+                    sub.iloc[v + 1].visit
+                )
+            ]
+
+            G.add_edge(
+                int(i),
+                int(j),
+                edge_type=TEMPORAL_EDGE
+            )
 
     # =====================================================
-    # STEP 7: SIMILARITY EDGES (OPTIONAL, SAME TIME BATCH)
+    # STEP 8: SIMILARITY EDGES
+    # (WITHIN SAME GRID ONLY)
     # =====================================================
-    for t in wide["time"].unique():
 
-        idx = wide.index[wide["time"] == t].to_numpy()
+    for visit in range(n_bins):
+
+        idx = wide.index[
+            wide["visit"] == visit
+        ].to_numpy()
 
         if len(idx) <= k_similarity:
             continue
 
-        Xv = X[idx]
+        X_visit = X[idx]
 
-        Xv = Xv / (np.linalg.norm(Xv, axis=1, keepdims=True) + 1e-8)
-
-        dist = 1 - Xv @ Xv.T
+        dist = np.linalg.norm(
+            X_visit[:, None, :]
+            - X_visit[None, :, :],
+            axis=-1
+        )
 
         for i_local, i_global in enumerate(idx):
 
-            nn = np.argsort(dist[i_local])[1:k_similarity + 1]
+            neighbors = np.argsort(
+                dist[i_local]
+            )[1:k_similarity + 1]
 
-            for j_local in nn:
+            for j_local in neighbors:
 
                 G.add_edge(
                     int(i_global),
                     int(idx[j_local]),
-                    edge_type=SIMILARITY_EDGE
+                    edge_type=SIMILARITY_EDGE,
+                    visit=int(visit)
                 )
 
     # =====================================================
-    # FINAL CHECK (CRITICAL)
+    # CHECK
     # =====================================================
-    assert G.number_of_nodes() == len(wide), "Node mismatch detected!"
 
-    print("nodes:", G.number_of_nodes())
-    print("expected:", len(wide))
+    print(
+        "nodes:",
+        G.number_of_nodes()
+    )
+
+    print(
+        "expected:",
+        len(subjects) * n_bins
+    )
 
     return G, wide
 
