@@ -212,31 +212,24 @@ SIMILARITY_EDGE = 1
 def build_temporal_graph_grid(
     df,
     n_bins=10,
-    k_similarity=10
+    k_similarity=10,
+    n_subspaces=5,
+    subspace_ratio=0.7
 ):
 
     df = df.copy()
 
     # =====================================================
-    # STEP 1: CREATE GLOBAL TIME GRID (ONLY FOR ASSIGNMENT)
+    # QUANTILE TIME GRID
     # =====================================================
-    t_min = df["time"].min()
-    t_max = df["time"].max()
-
-    bins = np.linspace(t_min, t_max, n_bins + 1)
-
-    df["visit"] = pd.cut(
-        df["time"],
-        bins=bins,
-        labels=False,
-        include_lowest=True
-    )
-
-    df["visit"] = df["visit"].clip(0, n_bins - 1)
+    df["visit"] = pd.qcut(
+        df["time"].rank(method="first"),
+        q=n_bins,
+        labels=False
+    ).astype(int)
 
     # =====================================================
-    # STEP 2: AGGREGATE ONLY REAL OBSERVATIONS
-    # (NO REINDEXING, NO FAKE NODES)
+    # AGGREGATION (REAL OBS ONLY)
     # =====================================================
     df = (
         df.groupby(["subject", "visit", "outcome"], as_index=False)
@@ -247,7 +240,7 @@ def build_temporal_graph_grid(
     )
 
     # =====================================================
-    # STEP 3: WIDE FORMAT (ONLY EXISTING NODES)
+    # WIDE FORMAT
     # =====================================================
     wide = (
         df.pivot_table(
@@ -259,7 +252,6 @@ def build_temporal_graph_grid(
         .reset_index()
     )
 
-    # attach mean time per node
     tmap = (
         df.groupby(["subject", "visit"], as_index=False)["time"]
         .mean()
@@ -268,7 +260,7 @@ def build_temporal_graph_grid(
     wide = wide.merge(tmap, on=["subject", "visit"], how="left")
 
     # =====================================================
-    # STEP 4: FEATURE MATRIX
+    # FEATURE MATRIX (NO TIME IN FEATURES)
     # =====================================================
     feature_cols = [
         c for c in wide.columns
@@ -279,19 +271,10 @@ def build_temporal_graph_grid(
     X = np.nan_to_num(X)
 
     X = StandardScaler().fit_transform(X)
-
     X = np.clip(X, -4, 4)
 
-    # add time as feature (NOT structural)
-    time_scaled = (
-        (wide["time"].values - wide["time"].mean())
-        / (wide["time"].std() + 1e-8)
-    ).reshape(-1, 1)
-
-    X = np.concatenate([X, time_scaled], axis=1)
-
     # =====================================================
-    # STEP 5: GRAPH INITIALIZATION
+    # GRAPH INIT
     # =====================================================
     G = nx.Graph()
 
@@ -304,7 +287,7 @@ def build_temporal_graph_grid(
     }
 
     # =====================================================
-    # ADD NODES (ONLY REAL OBSERVATIONS)
+    # NODES
     # =====================================================
     for i, row in wide.iterrows():
 
@@ -317,7 +300,7 @@ def build_temporal_graph_grid(
         )
 
     # =====================================================
-    # STEP 6: TEMPORAL EDGES (ONLY WHERE DATA EXISTS)
+    # TEMPORAL EDGES
     # =====================================================
     subjects = wide["subject"].unique()
 
@@ -333,7 +316,7 @@ def build_temporal_graph_grid(
             G.add_edge(u, v, edge_type=TEMPORAL_EDGE)
 
     # =====================================================
-    # STEP 7: SIMILARITY EDGES (WITHIN SAME GRID BIN)
+    # 🔥 ROBUST SUBSPACE SIMILARITY (REPLACED PART)
     # =====================================================
     for v in sorted(wide["visit"].unique()):
 
@@ -344,12 +327,11 @@ def build_temporal_graph_grid(
 
         Xv = X[idx]
 
-        # cosine similarity
-        norm = np.linalg.norm(Xv, axis=1, keepdims=True) + 1e-8
-        Xv_norm = Xv / norm
-
-        sim = Xv_norm @ Xv_norm.T
-        dist = 1 - sim
+        dist = _robust_distance_matrix(
+            Xv,
+            n_subspaces=n_subspaces,
+            subspace_ratio=subspace_ratio
+        )
 
         for i_local, i_global in enumerate(idx):
 
@@ -364,9 +346,6 @@ def build_temporal_graph_grid(
                     visit=int(v)
                 )
 
-    # =====================================================
-    # FINAL CHECK
-    # =====================================================
     print("nodes:", G.number_of_nodes())
 
     return G, wide
