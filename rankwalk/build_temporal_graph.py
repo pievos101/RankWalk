@@ -218,17 +218,12 @@ def build_temporal_graph_grid(
     df = df.copy()
 
     # =====================================================
-    # STEP 1: CREATE GLOBAL TIME GRID
+    # STEP 1: CREATE GLOBAL TIME GRID (ONLY FOR ASSIGNMENT)
     # =====================================================
+    t_min = df["time"].min()
+    t_max = df["time"].max()
 
-    t_min = float(df["time"].min())
-    t_max = float(df["time"].max())
-
-    bins = np.linspace(
-        t_min,
-        t_max,
-        n_bins + 1
-    )
+    bins = np.linspace(t_min, t_max, n_bins + 1)
 
     df["visit"] = pd.cut(
         df["time"],
@@ -237,22 +232,14 @@ def build_temporal_graph_grid(
         include_lowest=True
     )
 
-    df["visit"] = np.clip(
-        df["visit"],
-        0,
-        n_bins - 1
-    )
+    df["visit"] = df["visit"].clip(0, n_bins - 1)
 
     # =====================================================
-    # STEP 2: COLLAPSE MULTIPLE OBSERVATIONS
-    # WITHIN SAME SUBJECT × VISIT × OUTCOME
+    # STEP 2: AGGREGATE ONLY REAL OBSERVATIONS
+    # (NO REINDEXING, NO FAKE NODES)
     # =====================================================
-
     df = (
-        df.groupby(
-            ["subject", "visit", "outcome"],
-            as_index=False
-        )
+        df.groupby(["subject", "visit", "outcome"], as_index=False)
         .agg(
             y=("y", "mean"),
             time=("time", "mean")
@@ -260,10 +247,8 @@ def build_temporal_graph_grid(
     )
 
     # =====================================================
-    # STEP 3: WIDE FORMAT
-    # ONE ROW = ONE NODE
+    # STEP 3: WIDE FORMAT (ONLY EXISTING NODES)
     # =====================================================
-
     wide = (
         df.pivot_table(
             index=["subject", "visit"],
@@ -274,124 +259,53 @@ def build_temporal_graph_grid(
         .reset_index()
     )
 
-    time_map = (
-        df.groupby(
-            ["subject", "visit"],
-            as_index=False
-        )["time"]
+    # attach mean time per node
+    tmap = (
+        df.groupby(["subject", "visit"], as_index=False)["time"]
         .mean()
     )
 
-    wide = wide.merge(
-        time_map,
-        on=["subject", "visit"],
-        how="left"
-    )
+    wide = wide.merge(tmap, on=["subject", "visit"], how="left")
 
     # =====================================================
-    # STEP 4: FORCE COMPLETE GRID
+    # STEP 4: FEATURE MATRIX
     # =====================================================
-
-    subjects = np.sort(
-        df["subject"].unique()
-    )
-
-    full_index = pd.MultiIndex.from_product(
-        [subjects, np.arange(n_bins)],
-        names=["subject", "visit"]
-    )
-
-    wide = (
-        wide.set_index(
-            ["subject", "visit"]
-        )
-        .reindex(full_index)
-        .reset_index()
-    )
-
-    # =====================================================
-    # FILL MISSING TIMES WITH BIN CENTERS
-    # =====================================================
-
-    bin_centers = (
-        bins[:-1] + bins[1:]
-    ) / 2
-
-    wide["time"] = wide["time"].fillna(
-        wide["visit"].map(
-            dict(enumerate(bin_centers))
-        )
-    )
-
-    # =====================================================
-    # STEP 5: FEATURE MATRIX
-    # =====================================================
-
     feature_cols = [
         c for c in wide.columns
-        if c not in [
-            "subject",
-            "visit",
-            "time"
-        ]
+        if c not in ["subject", "visit", "time"]
     ]
 
-    X_out = wide[
-        feature_cols
-    ].values.astype(np.float32)
+    X = wide[feature_cols].values.astype(np.float32)
+    X = np.nan_to_num(X)
 
-    X_out = np.nan_to_num(X_out)
+    X = StandardScaler().fit_transform(X)
 
-    X_out = StandardScaler().fit_transform(
-        X_out
-    )
+    X = np.clip(X, -4, 4)
 
-    X_out = np.clip(
-        X_out,
-        -4,
-        4
-    )
-
-    # -----------------------------------------------------
-    # Add actual time as feature
-    # -----------------------------------------------------
-
+    # add time as feature (NOT structural)
     time_scaled = (
-        (
-            wide["time"].values
-            - wide["time"].mean()
-        )
-        /
-        (
-            wide["time"].std()
-            + 1e-8
-        )
+        (wide["time"].values - wide["time"].mean())
+        / (wide["time"].std() + 1e-8)
     ).reshape(-1, 1)
 
-    X = np.concatenate(
-        [X_out, time_scaled],
-        axis=1
-    )
+    X = np.concatenate([X, time_scaled], axis=1)
 
     # =====================================================
-    # STEP 6: GRAPH
+    # STEP 5: GRAPH INITIALIZATION
     # =====================================================
-
     G = nx.Graph()
 
-    wide["node_id"] = np.arange(
-        len(wide)
-    )
+    wide = wide.sort_values(["subject", "visit"]).reset_index(drop=True)
+    wide["node_id"] = np.arange(len(wide))
 
     node_index = {
         (r.subject, r.visit): r.node_id
         for r in wide.itertuples()
     }
 
-    # -----------------------------------------------------
-    # Nodes
-    # -----------------------------------------------------
-
+    # =====================================================
+    # ADD NODES (ONLY REAL OBSERVATIONS)
+    # =====================================================
     for i, row in wide.iterrows():
 
         G.add_node(
@@ -403,92 +317,57 @@ def build_temporal_graph_grid(
         )
 
     # =====================================================
-    # STEP 7: TEMPORAL EDGES
+    # STEP 6: TEMPORAL EDGES (ONLY WHERE DATA EXISTS)
     # =====================================================
+    subjects = wide["subject"].unique()
 
-    for subject in subjects:
+    for s in subjects:
 
-        sub = (
-            wide[
-                wide.subject == subject
-            ]
-            .sort_values("visit")
-        )
+        sub = wide[wide.subject == s].sort_values("visit")
 
-        for v in range(
-            len(sub) - 1
-        ):
+        for i in range(len(sub) - 1):
 
-            i = node_index[
-                (
-                    subject,
-                    sub.iloc[v].visit
-                )
-            ]
+            u = node_index[(s, sub.iloc[i].visit)]
+            v = node_index[(s, sub.iloc[i + 1].visit)]
 
-            j = node_index[
-                (
-                    subject,
-                    sub.iloc[v + 1].visit
-                )
-            ]
-
-            G.add_edge(
-                int(i),
-                int(j),
-                edge_type=TEMPORAL_EDGE
-            )
+            G.add_edge(u, v, edge_type=TEMPORAL_EDGE)
 
     # =====================================================
-    # STEP 8: SIMILARITY EDGES
-    # (WITHIN SAME GRID ONLY)
+    # STEP 7: SIMILARITY EDGES (WITHIN SAME GRID BIN)
     # =====================================================
+    for v in sorted(wide["visit"].unique()):
 
-    for visit in range(n_bins):
-
-        idx = wide.index[
-            wide["visit"] == visit
-        ].to_numpy()
+        idx = wide.index[wide["visit"] == v].to_numpy()
 
         if len(idx) <= k_similarity:
             continue
 
-        X_visit = X[idx]
+        Xv = X[idx]
 
-        dist = np.linalg.norm(
-            X_visit[:, None, :]
-            - X_visit[None, :, :],
-            axis=-1
-        )
+        # cosine similarity
+        norm = np.linalg.norm(Xv, axis=1, keepdims=True) + 1e-8
+        Xv_norm = Xv / norm
+
+        sim = Xv_norm @ Xv_norm.T
+        dist = 1 - sim
 
         for i_local, i_global in enumerate(idx):
 
-            neighbors = np.argsort(
-                dist[i_local]
-            )[1:k_similarity + 1]
+            nn = np.argsort(dist[i_local])[1:k_similarity + 1]
 
-            for j_local in neighbors:
+            for j_local in nn:
 
                 G.add_edge(
                     int(i_global),
                     int(idx[j_local]),
                     edge_type=SIMILARITY_EDGE,
-                    visit=int(visit)
+                    visit=int(v)
                 )
 
     # =====================================================
-    # CHECK
+    # FINAL CHECK
     # =====================================================
-
-    print(
-        "nodes:",
-        G.number_of_nodes()
-    )
-
-    print(
-        "expected:",
-        len(subjects) * n_bins
-    )
+    print("nodes:", G.number_of_nodes())
 
     return G, wide
 
