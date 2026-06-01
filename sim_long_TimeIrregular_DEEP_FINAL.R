@@ -75,10 +75,10 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 
     x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
 
-    #t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
-    #t = (t - t.mean()) / (t.std() + 1e-8)
+    t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
+    t = (t - t.mean()) / (t.std() + 1e-8)
 
-    #x = torch.cat([x, t], dim=1)
+    x = torch.cat([x, t], dim=1)
 
     edges, et = [], []
 
@@ -188,14 +188,14 @@ for (ii in 1:n_iter) {
 
   print(r_sigma_diag)
 
-  #Longdat2 <- simLongData(
-  #  ranTimes = TRUE,
-  #  n_i = 10,
-  #  eta = r_eta,
-  #  sigma_diag = r_sigma_diag
-  #)
+  Longdat2 <- simLongData(
+    ranTimes = TRUE,
+    n_i = 10,
+    eta = r_eta,
+    sigma_diag = r_sigma_diag
+  )
 
-  Longdat2 = simLongData_FPCA_vs_GNN()
+  #Longdat2 = simLongData_FPCA_vs_GNN()
 
   # =====================================================
   # WIDE FORMAT
