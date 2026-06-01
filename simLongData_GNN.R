@@ -1,3 +1,405 @@
+simLongData_CoupledTrajectories <- function(
+  n_total = 200,
+  K = 4,
+  outcomes = 5,
+  eta = 3,
+  cluster_sizes = rep(n_total / K, K),
+  ranTimes = TRUE,
+  n_i = 10,
+  sigma_diag = rep(3, outcomes)
+){
+
+  library(MASS)
+
+  # =====================================================
+  # GLOBAL DISEASE PROGRESSION
+  # =====================================================
+
+  base_fun <- function(t){
+    8*t - 0.5*t^2
+  }
+
+  # =====================================================
+  # SUBJECT RANDOM EFFECTS
+  # =====================================================
+
+  R <- matrix(c(
+    1,0.5,0.3,0.1,0,
+    0.5,1,0.2,0.1,0,
+    0.3,0.2,1,0.1,0,
+    0.1,0.1,0.1,1,0,
+    0,0,0,0,1
+  ), outcomes, outcomes)
+
+  Sigma_sigma <- diag(sigma_diag) %*%
+    R %*%
+    diag(sigma_diag)
+
+  sim_data <- list()
+  subject_id <- 1
+
+  # =====================================================
+  # CLUSTER-SPECIFIC COUPLING PATTERNS
+  # =====================================================
+
+  for(k in 1:K){
+
+    for(i in 1:cluster_sizes[k]){
+
+      if(ranTimes){
+
+        n_i_sub <- sample(4:12,1)
+
+        times <- sort(
+          c(
+            0,
+            runif(
+              n_i_sub-1,
+              min = 0.5,
+              max = 11
+            )
+          )
+        )
+
+      } else {
+
+        times <- seq(
+          0,
+          11,
+          length.out = n_i
+        )
+
+      }
+
+      # -----------------------------------------
+      # Subject-level random outcome shifts
+      # -----------------------------------------
+
+      u_i <- MASS::mvrnorm(
+        1,
+        mu = rep(0, outcomes),
+        Sigma = Sigma_sigma
+      )
+
+      # -----------------------------------------
+      # Subject-specific latent disease severity
+      # -----------------------------------------
+
+      severity <- rnorm(
+        1,
+        mean = 0,
+        sd = 1
+      )
+
+      for(t in times){
+
+        # smooth subject curve
+        random_curve <- generate_random_curve(t)
+
+        latent_state <-
+          base_fun(t) +
+          2*severity +
+          random_curve
+
+        # =========================================
+        # CLUSTER DEFINITIONS
+        # =========================================
+
+        if(k == 1){
+
+          # all outcomes increase together
+
+          mu <- c(
+            latent_state,
+            latent_state,
+            latent_state,
+            latent_state,
+            latent_state
+          )
+
+        }
+
+        if(k == 2){
+
+          # outcome 1 & 2 increase
+          # outcome 3 & 4 decrease
+
+          mu <- c(
+            latent_state,
+            latent_state,
+            -latent_state,
+            -latent_state,
+            latent_state
+          )
+
+        }
+
+        if(k == 3){
+
+          # alternating pattern
+
+          mu <- c(
+            latent_state,
+            -latent_state,
+            latent_state,
+            -latent_state,
+            latent_state
+          )
+
+        }
+
+        if(k == 4){
+
+          # delayed coupling
+
+          delayed <-
+            base_fun(max(t-2,0)) +
+            2*severity +
+            random_curve
+
+          mu <- c(
+            latent_state,
+            latent_state,
+            delayed,
+            delayed,
+            -latent_state
+          )
+
+        }
+
+        # =========================================
+        # OBSERVATIONS
+        # =========================================
+
+        for(h in 1:outcomes){
+
+          y <-
+
+            mu[h] +
+
+            u_i[h] +
+
+            rnorm(
+              1,
+              mean = 0,
+              sd = eta
+            )
+
+          sim_data[[length(sim_data)+1]] <-
+            data.frame(
+              subject = subject_id,
+              time = t,
+              outcome = h,
+              y = y,
+              cluster = k
+            )
+        }
+      }
+
+      subject_id <- subject_id + 1
+    }
+  }
+
+  sim_df <- do.call(rbind, sim_data)
+
+  return(sim_df)
+}
+
+
+simLongData_GNNboost = function(
+  n_total = 200,
+  K = 4,
+  outcomes = 5,
+  eta = 3,
+  cluster_sizes = rep(n_total / K, K),
+  ranTimes = TRUE,
+  n_i = 10,
+  sigma_diag = rep(3, 5),
+  interaction_strength = 0.2,   # NEW
+  graph_density = 0.08          # NEW
+){
+
+  library(MASS)
+
+  # =====================================================
+  # FIXED EFFECTS (same as yours)
+  # =====================================================
+  mean_functions <- list(
+    list(
+      function(t) 8*t - 0.6*t^2,
+      function(t) t,
+      function(t) -10 + 6*t - 0.4*t^2,
+      function(t) -1 + t,
+      function(t) -2*t + 0.1*t^2
+    ),
+    list(
+      function(t) 20 - 6*t + 0.3*t^2,
+      function(t) -t,
+      function(t) -10 + 6*t - 0.4*t^2,
+      function(t) -1 + t,
+      function(t) -2*t + 0.1*t^2
+    ),
+    list(
+      function(t) 0,
+      function(t) -7*t + 0.5*t^2,
+      function(t) 0.2*t,
+      function(t) -1 + t,
+      function(t) -2*t + 0.1*t^2
+    ),
+    list(
+      function(t) 20,
+      function(t) -20 + t,
+      function(t) 0.2*t,
+      function(t) 10 + 2*t - 0.2*t^2,
+      function(t) -2*t + 0.1*t^2
+    )
+  )
+
+  # =====================================================
+  # SUBJECT RANDOM EFFECTS
+  # =====================================================
+  R <- matrix(c(
+    1, 0.5, 0.3, -0.1, 0,
+    0.5, 1, 0.2, 0.1, 0,
+    0.3, 0.2, 1, 0.1, 0,
+    -0.1, 0.1, 0.1, 1, 0,
+    0, 0, 0, 0, 1
+  ), nrow = outcomes)
+
+  Sigma_sigma <- diag(sigma_diag) %*% R %*% diag(sigma_diag)
+
+  # =====================================================
+  # STEP 1: LATENT INTERACTION GRAPH (CRUCIAL PART)
+  # =====================================================
+  subjects <- 1:n_total
+
+  # random sparse graph
+  A <- matrix(0, n_total, n_total)
+
+  for (i in 1:n_total){
+    neighbors <- sample(
+      subjects[-i],
+      size = rbinom(1, n_total-1, graph_density)
+    )
+    A[i, neighbors] <- runif(length(neighbors), 0.3, 1)
+  }
+
+  A <- (A + t(A)) / 2  # symmetric influence
+
+  # normalize
+  A <- A / (rowSums(A) + 1e-8)
+
+  # =====================================================
+  # SIMULATION STORAGE
+  # =====================================================
+  sim_data <- list()
+  subject_id <- 1
+
+  # store all trajectories for interaction step
+  all_subject_curves <- list()
+
+  # =====================================================
+  # PASS 1: generate baseline curves
+  # =====================================================
+  for (k in 1:K){
+
+    for (i in 1:cluster_sizes[k]){
+
+      if (ranTimes){
+        n_i <- sample(4:12, 1)
+        times <- sort(runif(n_i, 0, 11))
+      } else {
+        times <- 1:n_i
+      }
+
+      u_i <- mvrnorm(1, rep(0, outcomes), Sigma_sigma)
+
+      curve <- matrix(0, nrow = length(times), ncol = outcomes)
+
+      for (j in 1:length(times)){
+        t <- times[j]
+
+        for (h in 1:outcomes){
+          curve[j, h] <-
+            mean_functions[[k]][[h]](t) +
+            u_i[h] +
+            rnorm(1, 0, eta)
+        }
+      }
+
+      all_subject_curves[[subject_id]] <- list(
+        times = times,
+        curve = curve
+      )
+
+      subject_id <- subject_id + 1
+    }
+  }
+
+  # =====================================================
+  # PASS 2: ADD INTERACTION EFFECTS (KEY DIFFERENCE)
+  # =====================================================
+  subject_id <- 1
+
+  for (k in 1:K){
+
+    for (i in 1:cluster_sizes[k]){
+
+      obj <- all_subject_curves[[subject_id]]
+
+      times <- obj$times
+      curve <- obj$curve
+
+      # interaction signal from neighbors
+      neighbor_ids <- which(A[subject_id, ] > 0)
+
+      if (length(neighbor_ids) > 0){
+
+        for (j in 1:length(times)){
+
+          t <- times[j]
+
+          neighbor_effect <- 0
+
+          for (n in neighbor_ids){
+
+            neighbor_curve <- all_subject_curves[[n]]$curve
+
+            # crude alignment by index (simple but effective)
+            idx <- min(j, nrow(neighbor_curve))
+
+            neighbor_effect <- neighbor_effect +
+              mean(neighbor_curve[idx, ])
+          }
+
+          curve[j, ] <- curve[j, ] +
+            interaction_strength * neighbor_effect
+        }
+      }
+
+      # write final data
+      for (j in 1:length(times)){
+        for (h in 1:outcomes){
+
+          sim_data[[length(sim_data) + 1]] <- data.frame(
+            subject = subject_id,
+            time = times[j],
+            outcome = h,
+            y = curve[j, h],
+            cluster = k
+          )
+        }
+      }
+
+      subject_id <- subject_id + 1
+    }
+  }
+
+  sim_df <- do.call(rbind, sim_data)
+  return(sim_df)
+}
+
+
 simLongData_GNN_friendly <- function(
   n_total = 200,
   K = 4,
