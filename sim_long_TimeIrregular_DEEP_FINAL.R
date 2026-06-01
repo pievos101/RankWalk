@@ -71,7 +71,7 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 
     for n in node_list:
         x_list.append(G.nodes[n]['features'])
-        #t_list.append(G.nodes[n]['time'])
+        t_list.append(G.nodes[n]['time'])
 
     x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
 
