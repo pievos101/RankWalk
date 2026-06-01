@@ -195,13 +195,7 @@ for (ii in 1:n_iter) {
     sigma_diag = r_sigma_diag
   )
 
-  # SIM2
-  #Longdat2 <- simClinicalGraphData(
-  #  n_total = 200,
-  #  K = 4,
-  #  outcomes = 5,
-  #  eta = 4
-  #)
+  #Longdat2 = simLongData_FPCA_vs_GNN(ranTimes = FALSE)
 
 
   Longdat2_wide <- reshape(
