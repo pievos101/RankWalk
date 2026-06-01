@@ -1,3 +1,216 @@
+simLongData_FPCA_vs_GNN <- function(
+  n_total = 200,
+  K = 4,
+  outcomes = 5,
+  eta = 1.0,
+  cluster_sizes = rep(n_total / K, K),
+  ranTimes = TRUE,
+  n_i = 10,
+  graph_density = 0.08,
+  interaction_strength = 0.9
+){
+
+  library(MASS)
+
+  # =====================================================
+  # 1. GLOBAL CLINICAL DISEASE PROCESS (FPCA-FRIENDLY)
+  # =====================================================
+
+  base_fun <- function(t){
+    4*sin(t/2) + 0.4*t
+  }
+
+  # =====================================================
+  # 2. OUTCOME-SPECIFIC BIOMARKER RESPONSE (REALISTIC)
+  # =====================================================
+
+  outcome_map <- list(
+    function(x) x,
+    function(x) 0.8*x,
+    function(x) -0.6*x,
+    function(x) 0.5*x + 0.1*x^2,
+    function(x) sin(x/3)
+  )
+
+  # =====================================================
+  # 3. SUBJECT RANDOM EFFECTS
+  # =====================================================
+
+  R <- matrix(c(
+    1,0.3,0.2,0.1,0,
+    0.3,1,0.2,0.1,0,
+    0.2,0.2,1,0.2,0,
+    0.1,0.1,0.2,1,0,
+    0,0,0,0,1
+  ), outcomes, outcomes)
+
+  Sigma_sigma <- diag(rep(2, outcomes)) %*% R %*% diag(rep(2, outcomes))
+
+  # =====================================================
+  # 4. CLUSTER-SPECIFIC DISEASE SHAPES (SMALL DIFFERENCES)
+  # =====================================================
+
+  cluster_effects <- list(
+    c(1, 1, 1, 1, 1),
+    c(1, 0.9, -0.5, -0.5, 0.8),
+    c(0.8, -0.6, 0.8, -0.3, 0.7),
+    c(-0.5, -0.5, 0.9, 1, 0.6)
+  )
+
+  # =====================================================
+  # 5. LATENT PATIENT NETWORK (CRUCIAL GNN SIGNAL)
+  # =====================================================
+
+  n <- n_total
+  A <- matrix(0, n, n)
+
+  for(i in 1:n){
+
+    deg <- rbinom(1, n-1, graph_density)
+    neighbors <- sample(setdiff(1:n, i), deg)
+
+    A[i, neighbors] <- runif(length(neighbors), 0.2, 1)
+  }
+
+  A <- (A + t(A)) / 2
+  A <- A / (rowSums(A) + 1e-8)
+
+  # =====================================================
+  # 6. SIMULATE BASE TRAJECTORIES
+  # =====================================================
+
+  sim_data <- list()
+  all_curves <- list()
+
+  subject_id <- 1
+
+  for(k in 1:K){
+
+    for(i in 1:cluster_sizes[k]){
+
+      if(ranTimes){
+        times <- sort(runif(sample(6:10,1), 0, 10))
+      } else {
+        times <- seq(0,10,length.out = n_i)
+      }
+
+      u_i <- MASS::mvrnorm(1, rep(0,outcomes), Sigma_sigma)
+
+      curve <- matrix(0, nrow=length(times), ncol=outcomes)
+
+      for(j in seq_along(times)){
+
+        t <- times[j]
+        base <- base_fun(t)
+
+        for(h in 1:outcomes){
+
+          curve[j,h] <-
+            cluster_effects[[k]][h] * base +
+            u_i[h] +
+            rnorm(1,0,eta)
+        }
+      }
+
+      all_curves[[subject_id]] <- list(times=times, curve=curve)
+      subject_id <- subject_id + 1
+    }
+  }
+
+  # =====================================================
+  # 7. ADD NETWORK-BASED DISEASE PROPAGATION (GNN ADVANTAGE)
+  # =====================================================
+
+  for(i in 1:n){
+
+    neighbors <- which(A[i,] > 0)
+
+    if(length(neighbors) == 0) next
+
+    obj <- all_curves[[i]]
+
+    times <- obj$times
+    curve <- obj$curve
+
+    for(j in seq_along(times)){
+
+      influence <- rep(0, outcomes)
+
+      for(nbr in neighbors){
+
+        nbr_curve <- all_curves[[nbr]]$curve
+        idx <- min(j, nrow(nbr_curve))
+
+        influence <- influence + colMeans(nbr_curve[idx, , drop=FALSE])
+      }
+
+      curve[j, ] <- curve[j, ] +
+        interaction_strength * influence / length(neighbors)
+    }
+
+    all_curves[[i]]$curve <- curve
+  }
+
+  # =====================================================
+  # 8. EXPORT DATAFRAME
+  # =====================================================
+
+  for(i in 1:n){
+
+    obj <- all_curves[[i]]
+
+    for(j in seq_along(obj$times)){
+
+      for(h in 1:outcomes){
+
+        sim_data[[length(sim_data)+1]] <- data.frame(
+          subject = i,
+          time = obj$times[j],
+          outcome = h,
+          y = obj$curve[j,h],
+          cluster = ceiling(i / (n/K))
+        )
+      }
+    }
+  }
+
+  do.call(rbind, sim_data)
+}
+
+plot_raw_vs_smooth <- function(df, max_subjects = 30){
+
+  library(dplyr)
+  library(ggplot2)
+
+  keep <- sample(unique(df$subject),
+                 min(max_subjects, length(unique(df$subject))))
+
+  df_sub <- df %>% filter(subject %in% keep)
+
+  ggplot(df_sub,
+         aes(x = time, y = y,
+             group = interaction(subject, outcome))) +
+
+    geom_line(alpha = 0.15, color = "grey60") +
+
+    stat_smooth(aes(group = interaction(cluster, outcome),
+                    color = factor(cluster)),
+                method = "loess",
+                se = FALSE,
+                size = 1.2) +
+
+    facet_wrap(~outcome, scales = "free_y") +
+
+    theme_minimal(base_size = 12) +
+    labs(
+      title = "Raw Trajectories + Cluster-Level Smooth Structure",
+      x = "Time",
+      y = "Value"
+    )
+}
+
+
+# This works great for GNN
 simLongData_CoupledTrajectories <- function(
   n_total = 200,
   K = 4,

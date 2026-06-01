@@ -195,7 +195,7 @@ for (ii in 1:n_iter) {
   #  sigma_diag = r_sigma_diag
   #)
 
-  Longdat2 = simLongData_CoupledTrajectories()
+  Longdat2 = simLongData_FPCA_vs_GNN()
 
   # =====================================================
   # WIDE FORMAT
