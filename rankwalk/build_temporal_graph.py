@@ -214,26 +214,50 @@ def build_temporal_graph_grid(
     n_bins=10,
     k_similarity=10,
     n_subspaces=5,
-    subspace_ratio=0.7
+    subspace_ratio=0.7,
+    overlap=0.5   # NEW: window overlap (0.3–0.7 recommended)
 ):
+
+    import numpy as np
+    import networkx as nx
+    from sklearn.preprocessing import StandardScaler
 
     df = df.copy()
 
     # =====================================================
-    # QUANTILE TIME GRID
+    # SLIDING TIME WINDOWS (OVERLAPPING VISITS)
     # =====================================================
-    df["visit"] = pd.qcut(
-        df["time"].rank(method="first"),
-        q=n_bins,
-        labels=False
-    ).astype(int)
+    t_min = df["time"].min()
+    t_max = df["time"].max()
 
-    # UNIFORM
-    #df["visit"] = pd.cut(
-    #    df["time"],
-    #    bins=n_bins,
-    #    labels=False
-    #)
+    total_range = t_max - t_min
+    window_size = total_range / n_bins
+    step = window_size * (1 - overlap)
+
+    rows = []
+
+    visit = 0
+    start = t_min
+
+    while start <= t_max:
+
+        end = start + window_size
+
+        tmp = df[
+            (df["time"] >= start) &
+            (df["time"] < end)
+        ].copy()
+
+        if len(tmp) > 0:
+            tmp["visit"] = visit
+            tmp["window_start"] = start
+            tmp["window_end"] = end
+            rows.append(tmp)
+
+        visit += 1
+        start += step
+
+    df = pd.concat(rows, ignore_index=True)
 
     # =====================================================
     # AGGREGATION (REAL OBS ONLY)
@@ -307,8 +331,11 @@ def build_temporal_graph_grid(
         )
 
     # =====================================================
-    # TEMPORAL EDGES
+    # TEMPORAL EDGES (SEQUENTIAL WITHIN SUBJECT)
     # =====================================================
+    TEMPORAL_EDGE = 0
+    SIMILARITY_EDGE = 1
+
     subjects = wide["subject"].unique()
 
     for s in subjects:
@@ -320,10 +347,14 @@ def build_temporal_graph_grid(
             u = node_index[(s, sub.iloc[i].visit)]
             v = node_index[(s, sub.iloc[i + 1].visit)]
 
-            G.add_edge(u, v, edge_type=TEMPORAL_EDGE)
+            G.add_edge(
+                u,
+                v,
+                edge_type=TEMPORAL_EDGE
+            )
 
     # =====================================================
-    # 🔥 ROBUST SUBSPACE SIMILARITY (REPLACED PART)
+    # WITHIN-VISIT kNN (ROBUST SUBSPACE SIMILARITY)
     # =====================================================
     for v in sorted(wide["visit"].unique()):
 
@@ -354,6 +385,7 @@ def build_temporal_graph_grid(
                 )
 
     print("nodes:", G.number_of_nodes())
+    print("edges:", G.number_of_edges())
 
     return G, wide
 
