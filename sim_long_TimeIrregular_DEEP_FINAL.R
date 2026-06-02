@@ -184,19 +184,19 @@ for (ii in 1:n_iter) {
 
   r_eta = 3
   r_sigma_diag = rep(5, 5)
-  id = sample(1:5, 1)
-  r_sigma_diag[id] = sample(5:20, 1)
+  #id = sample(1:5, 1)
+  #r_sigma_diag[id] = sample(5:20, 1)
 
   print(r_sigma_diag)
 
-  Longdat2 <- simLongData(
-    ranTimes = TRUE,
-    n_i = 10,
-    eta = r_eta,
-    sigma_diag = r_sigma_diag
-  )
+  #Longdat2 <- simLongData(
+  #  ranTimes = TRUE,
+  #  n_i = 10,
+  #  eta = r_eta,
+  #  sigma_diag = r_sigma_diag
+  #)
 
-  #Longdat2 = simLongData_FPCA_vs_GNN()
+  Longdat2 = simLongData_CoupledTrajectories(sigma_diag=r_sigma_diag)
 
   # =====================================================
   # WIDE FORMAT
