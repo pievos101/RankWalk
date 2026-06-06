@@ -28,7 +28,7 @@ df <- df[complete.cases(df$RID, df$YEARS_bl), ]
 df$RID <- as.numeric(df$RID)
 df$time <- as.numeric(df$YEARS_bl)
 
-biomarkers <- c("ADAS13", "CDRSB")
+biomarkers <- c("MMSE","ADAS13", "CDRSB")
 
 for (v in biomarkers) {
   df[[v]] <- suppressWarnings(as.numeric(df[[v]]))
@@ -178,7 +178,7 @@ def run_rankwalk_gnn(df, epochs=120):
         df,
         k_similarity=5,
         n_bins=5,
-        overlap=0.2
+        overlap=0.5
     )
 
     nodes = list(G.nodes())
@@ -194,7 +194,7 @@ def run_rankwalk_gnn(df, epochs=120):
     t = torch.tensor(t, dtype=torch.float32, device=device).unsqueeze(1)
 
     t = (t - t.mean()) / (t.std() + 1e-8)
-    x = torch.cat([x, t], dim=1)
+    #x = torch.cat([x, t], dim=1)
 
     edges, et = [], []
     for u, v, a in G.edges(data=True):
@@ -275,31 +275,60 @@ for (r in 1:n_runs) {
   # -------------------------
   #set.seed(r)
 
-  gnn_out <- run_gnn()
+ gnn_out <- run_gnn()
 
   emb <- gnn_out$emb
   sub <- gnn_out$sub
 
-  subjects <- unique(sub)
+  subjects <- sort(unique(sub))
 
-  feat <- do.call(rbind, lapply(subjects, function(s) {
-    idx <- which(sub == s)
-    as.numeric(t(emb[idx, , drop = FALSE]))  # FLATTEN
-  }))
+  feat <- do.call(
+    rbind,
+    lapply(subjects, function(s) {
+
+      idx <- which(sub == s)
+
+      E <- emb[idx, , drop = FALSE]
+
+      mu <- colMeans(E)
+
+      if (nrow(E) > 1) {
+        sdv <- apply(E, 2, sd)
+      } else {
+        sdv <- rep(0, ncol(E))
+      }
+
+      c(mu, sdv)
+    })
+  )
 
   rownames(feat) <- subjects
+
+  feat[!is.finite(feat)] <- 0
+
   feat <- scale(feat)
 
-  cl_gnn <- kmeans(feat, centers = 2, nstart = 50)$cluster
+  cl_gnn <- kmeans(
+    feat,
+    centers = 2,
+    nstart = 50
+  )$cluster
 
   gnn_df <- data.frame(
-    RID = as.numeric(names(cl_gnn)),
+    RID = as.numeric(subjects),
     cluster = cl_gnn
   )
 
-  gnn_merge <- merge(true_labels, gnn_df, by = "RID")
+  gnn_merge <- merge(
+    true_labels,
+    gnn_df,
+    by = "RID"
+  )
 
-  ARI_gnn <- ARI(gnn_merge$dem, gnn_merge$cluster)
+  ARI_gnn <- ARI(
+    gnn_merge$dem,
+    gnn_merge$cluster
+  )
 
   surv_gnn <- merge(
     aggregate(time ~ RID, df, max),
