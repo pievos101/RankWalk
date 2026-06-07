@@ -25,7 +25,7 @@ df <- df[complete.cases(df$RID, df$YEARS_bl), ]
 df$RID <- as.numeric(df$RID)
 df$time <- as.numeric(df$YEARS_bl)
 
-biomarkers <- c("MMSE", "ADAS13", "CDRSB")
+biomarkers <- c("ADAS13", "CDRSB") #c("MMSE", "ADAS13", "CDRSB")
 
 for (v in biomarkers) {
   df[[v]] <- suppressWarnings(as.numeric(df[[v]]))
@@ -40,10 +40,10 @@ df$CDRSB  <- log1p(df$CDRSB)
 df$MMSE <- max(df$MMSE, na.rm = TRUE) - df$MMSE
 
 # =========================================================
-# FILTER (>= 5 VISITS)
+# FILTER (>= 3 VISITS)
 # =========================================================
 visit_counts <- table(df$RID)
-keep_ids <- as.numeric(names(visit_counts[visit_counts >= 5]))
+keep_ids <- as.numeric(names(visit_counts[visit_counts >= 3]))
 df <- df[df$RID %in% keep_ids, ]
 
 # =========================================================
@@ -65,7 +65,7 @@ true_labels <- data.frame(
 # =========================================================
 # BALANCE CLASSES (FIXED)
 # =========================================================
-set.seed(1)
+#set.seed(1)
 
 n1 <- sum(true_labels$dem == 1)
 n0 <- sum(true_labels$dem == 0)
@@ -171,7 +171,7 @@ def run_rankwalk_gnn(df, epochs=120):
     t = torch.tensor(t, dtype=torch.float32, device=device).unsqueeze(1)
     t = (t - t.mean()) / (t.std() + 1e-8)
 
-    x = torch.cat([x, t], dim=1)
+    #x = torch.cat([x, t], dim=1)
 
     edges = []
     et = []
@@ -188,13 +188,8 @@ def run_rankwalk_gnn(df, epochs=120):
     edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous()
     edge_type = torch.tensor(et, dtype=torch.long, device=device)
 
-    try:
-        J = compute_jaccard_fast(edge_index, n_nodes, device=device)
-        if J is None:
-            raise Exception()
-    except:
-        J = torch.eye(n_nodes, device=device)
-
+    J = compute_jaccard_fast(edge_index, n_nodes, device=device)
+    
     emb = train_gnn(
         x, edge_index, edge_type, J,
         epochs=epochs,
@@ -262,7 +257,7 @@ for (r in 1:n_runs) {
   cat("\nRUN", r, "\n")
 
   # ---------------- FPCA ----------------
-  cl_fpca <- kmeans(X_fpca, 2, nstart = 50)$cluster
+  cl_fpca <- kmeans(X_fpca, 3, nstart = 50)$cluster
 
   fpca_df <- data.frame(RID=as.numeric(rownames(X_fpca)),
                         cluster=cl_fpca)
@@ -285,17 +280,33 @@ for (r in 1:n_runs) {
 
   subjects <- sort(unique(sub))
 
-  feat <- do.call(rbind, lapply(subjects, function(s) {
-    idx <- which(sub == s)
-    E <- emb[idx,,drop=FALSE]
-    c(colMeans(E), apply(E,2,sd))
+  # =========================================================
+  # FLATTEN NODE EMBEDDINGS PER SUBJECT
+  # =========================================================
+
+  feat <- lapply(subjects, function(g) {
+
+    idx <- which(sub == g)
+
+    E <- emb[idx, , drop = FALSE]
+
+    as.numeric(t(E))
+  })
+
+  # ensure equal length vectors
+  max_len <- max(sapply(feat, length))
+
+  feat <- t(sapply(feat, function(x) {
+    c(x, rep(0, max_len - length(x)))
   }))
 
   rownames(feat) <- subjects
+
   feat[!is.finite(feat)] <- 0
+
   feat <- scale(feat)
 
-  cl_gnn <- kmeans(feat, 2, nstart=50)$cluster
+  cl_gnn <- kmeans(feat, 3, nstart=50)$cluster
 
   gnn_df <- data.frame(RID=as.numeric(subjects),
                        cluster=cl_gnn)
@@ -315,8 +326,7 @@ for (r in 1:n_runs) {
                    ci_fpca, ci_gnn,
                    lr_fpca, lr_gnn)
 
-  cat("FPCA ARI:", ARI_fpca, "\n")
-  cat("GNN ARI:", ARI_gnn, "\n")
+  print(results)
 }
 
 # =========================================================
