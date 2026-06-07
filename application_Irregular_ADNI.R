@@ -7,7 +7,6 @@ library(aricode)
 library(reticulate)
 library(aba)
 library(survival)
-library(fdapace)
 
 # =========================================================
 # LOAD DATA
@@ -26,34 +25,34 @@ df <- df[complete.cases(df$RID, df$YEARS_bl), ]
 df$RID <- as.numeric(df$RID)
 df$time <- as.numeric(df$YEARS_bl)
 
-biomarkers <- c("MMSE","ADAS13","CDRSB")
+biomarkers <- c("MMSE", "ADAS13", "CDRSB")
 
 for (v in biomarkers) {
   df[[v]] <- suppressWarnings(as.numeric(df[[v]]))
 }
 
 # =========================================================
-# TRANSFORMS
+# TRANSFORMATIONS
 # =========================================================
 df$ADAS13 <- log1p(df$ADAS13)
 df$CDRSB  <- log1p(df$CDRSB)
 
-df$MMSE <- max(df$MMSE, na.rm=TRUE) - df$MMSE
+df$MMSE <- max(df$MMSE, na.rm = TRUE) - df$MMSE
 
 # =========================================================
-# FILTER SUBJECTS
+# FILTER (>= 5 VISITS)
 # =========================================================
 visit_counts <- table(df$RID)
 keep_ids <- as.numeric(names(visit_counts[visit_counts >= 5]))
 df <- df[df$RID %in% keep_ids, ]
 
 # =========================================================
-# SUBJECT LABELS + SURVIVAL TIME
+# SUBJECT OUTCOME
 # =========================================================
 dem_per_subject <- tapply(
   df$ConvertedToDementia,
   df$RID,
-  function(x) as.numeric(any(x == 1, na.rm=TRUE))
+  function(x) as.numeric(any(x == 1, na.rm = TRUE))
 )
 
 dem_per_subject[is.na(dem_per_subject)] <- 0
@@ -63,10 +62,8 @@ true_labels <- data.frame(
   dem = as.numeric(dem_per_subject)
 )
 
-subject_time <- aggregate(time ~ RID, df, max)
-
 # =========================================================
-# BALANCE CLASSES
+# BALANCE CLASSES (FIXED)
 # =========================================================
 set.seed(1)
 
@@ -74,45 +71,45 @@ n1 <- sum(true_labels$dem == 1)
 n0 <- sum(true_labels$dem == 0)
 n_min <- min(n1, n0)
 
-ids_1 <- sample(true_labels$RID[true_labels$dem==1], n_min)
-ids_0 <- sample(true_labels$RID[true_labels$dem==0], n_min)
+ids_1 <- sample(true_labels$RID[true_labels$dem == 1], n_min)
+ids_0 <- sample(true_labels$RID[true_labels$dem == 0], n_min)
 
 keep_ids <- c(ids_1, ids_0)
 
 df <- df[df$RID %in% keep_ids, ]
 true_labels <- true_labels[true_labels$RID %in% keep_ids, ]
-subject_time <- subject_time[subject_time$RID %in% keep_ids, ]
 
 # =========================================================
-# FPCA
+# FPCA (SAFE)
 # =========================================================
 fpca_features <- list()
 
 for (v in biomarkers) {
 
-  tmp <- df[, c("RID","time",v)]
+  tmp <- df[, c("RID", "time", v)]
   tmp <- tmp[complete.cases(tmp), ]
-
-  if (length(unique(tmp$RID)) < 10) next
 
   Ly <- split(tmp[[v]], tmp$RID)
   Lt <- split(tmp$time, tmp$RID)
 
   fp <- try(
-    FPCA(Ly=Ly, Lt=Lt,
-         optns=list(dataType="Sparse")),
-    silent=TRUE
+    FPCA(Ly = Ly, Lt = Lt, optns = list(dataType = "Sparse")),
+    silent = TRUE
   )
 
-  if (inherits(fp,"try-error")) next
+  if (inherits(fp, "try-error")) next
 
-  S <- fp$xiEst
-  if (is.null(dim(S))) S <- matrix(S, ncol=1)
+  scores <- fp$xiEst
+  if (is.null(dim(scores))) scores <- matrix(scores, ncol = 1)
 
-  rownames(S) <- names(Ly)
-  S[!is.finite(S)] <- 0
+  rownames(scores) <- names(Ly)
+  scores[!is.finite(scores)] <- 0
 
-  fpca_features[[v]] <- S
+  fpca_features[[v]] <- scores
+}
+
+if (length(fpca_features) == 0) {
+  stop("FPCA failed for all biomarkers")
 }
 
 ids <- sort(unique(df$RID))
@@ -122,22 +119,24 @@ for (v in names(fpca_features)) {
 
   S <- fpca_features[[v]]
 
-  tmp <- matrix(0, nrow=length(ids), ncol=ncol(S))
+  tmp <- matrix(0, nrow = length(ids), ncol = ncol(S))
   rownames(tmp) <- ids
 
   common <- intersect(rownames(S), ids)
-  tmp[match(common,ids),] <- S[common,,drop=FALSE]
 
-  X_fpca <- if (is.null(X_fpca)) tmp else cbind(X_fpca,tmp)
+  tmp[match(common, ids), ] <- S[common, , drop = FALSE]
+
+  X_fpca <- if (is.null(X_fpca)) tmp else cbind(X_fpca, tmp)
 }
 
+X_fpca[!is.finite(X_fpca)] <- 0
 X_fpca <- scale(X_fpca)
 
 # =========================================================
-# PYTHON: RANKWALK GNN
+# PYTHON SETUP (NO py_run_string DEBUG BLOCKS)
 # =========================================================
 Sys.setenv(RETICULATE_PYTHON = path.expand("~/rankwalk-venv/bin/python"))
-use_python(Sys.getenv("RETICULATE_PYTHON"), required=TRUE)
+use_python(Sys.getenv("RETICULATE_PYTHON"), required = TRUE)
 
 py_run_string("
 import numpy as np
@@ -149,7 +148,7 @@ def run_rankwalk_gnn(df, epochs=120):
 
     df = pd.DataFrame(df)
 
-    G,_ = build_temporal_graph_grid(
+    G, _ = build_temporal_graph_grid(
         df,
         k_similarity=5,
         n_bins=5,
@@ -157,6 +156,8 @@ def run_rankwalk_gnn(df, epochs=120):
     )
 
     nodes = list(G.nodes())
+    n_nodes = G.number_of_nodes()
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     x = []
@@ -168,23 +169,31 @@ def run_rankwalk_gnn(df, epochs=120):
 
     x = torch.tensor(np.array(x), dtype=torch.float32, device=device)
     t = torch.tensor(t, dtype=torch.float32, device=device).unsqueeze(1)
-    t = (t - t.mean())/(t.std()+1e-8)
+    t = (t - t.mean()) / (t.std() + 1e-8)
 
-    x = torch.cat([x,t],dim=1)
+    x = torch.cat([x, t], dim=1)
 
-    edges=[]
-    et=[]
+    edges = []
+    et = []
 
-    for u,v,a in G.edges(data=True):
-        edges.append([u,v]); et.append(a.get('edge_type',0))
-        edges.append([v,u]); et.append(a.get('edge_type',0))
+    for u, v, a in G.edges(data=True):
+        edges.append([u, v])
+        et.append(a.get('edge_type', 0))
+        edges.append([v, u])
+        et.append(a.get('edge_type', 0))
 
-    edge_index = torch.tensor(edges,dtype=torch.long,device=device).t().contiguous()
-    edge_type = torch.tensor(et,dtype=torch.long,device=device)
+    if len(edges) == 0:
+        raise ValueError('Empty graph')
 
-    J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
-    if J is None:
-        J = torch.eye(G.number_of_nodes(), device=device)
+    edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous()
+    edge_type = torch.tensor(et, dtype=torch.long, device=device)
+
+    try:
+        J = compute_jaccard_fast(edge_index, n_nodes, device=device)
+        if J is None:
+            raise Exception()
+    except:
+        J = torch.eye(n_nodes, device=device)
 
     emb = train_gnn(
         x, edge_index, edge_type, J,
@@ -195,15 +204,12 @@ def run_rankwalk_gnn(df, epochs=120):
         device=device
     )
 
-    return {
-        'emb': emb.detach().cpu().numpy(),
-        'sub': np.array([G.nodes[n]['subject'] for n in nodes])
-    }
+    return emb.detach().cpu().numpy(), np.array([G.nodes[n]['subject'] for n in nodes])
 ")
 
 run_gnn <- function() {
   res <- py$run_rankwalk_gnn(Longdat2, 100L)
-  list(emb=res$emb, sub=as.numeric(res$sub))
+  list(emb = res[[1]], sub = as.numeric(res[[2]]))
 }
 
 # =========================================================
@@ -213,14 +219,14 @@ Longdat_list <- list()
 
 for (v in biomarkers) {
 
-  tmp <- df[, c("RID","time",v)]
+  tmp <- df[, c("RID", "time", v)]
   tmp <- tmp[complete.cases(tmp), ]
 
   Longdat_list[[v]] <- data.frame(
-    subject=tmp$RID,
-    time=tmp$time,
-    outcome=v,
-    y=tmp[[v]]
+    subject = tmp$RID,
+    time = tmp$time,
+    outcome = v,
+    y = tmp[[v]]
   )
 }
 
@@ -230,30 +236,21 @@ Longdat2 <- Longdat2[complete.cases(Longdat2), ]
 # =========================================================
 # METRICS HELPERS
 # =========================================================
-get_metrics <- function(cluster, true_labels, subject_time) {
+logrank_stat <- function(time, status, group) {
+  d <- data.frame(time=time, status=status, group=group)
+  lr <- survdiff(Surv(time, status) ~ group, data=d)
+  sum((lr$obs - lr$exp)^2 / lr$exp)
+}
 
-  dfm <- merge(true_labels, subject_time, by="RID")
-  dfm$cluster <- cluster[match(dfm$RID, names(cluster))]
-
-  # ARI
-  ari <- ARI(dfm$dem, dfm$cluster)
-
-  # C-index
-  cidx <- concordance(Surv(time, dem) ~ cluster, data=dfm)$concordance
-
-  # log-rank statistic (NO p-value)
-  lr <- survdiff(Surv(time, dem) ~ cluster, data=dfm)
-  lr_stat <- sum((lr$obs - lr$exp)^2 / lr$exp)
-
-  list(ARI=ari, C=cidx, LR=lr_stat)
+c_index <- function(time, status, score) {
+  concordance(Surv(time, status) ~ score)$concordance
 }
 
 # =========================================================
-# 30 RUNS
+# EXPERIMENT LOOP
 # =========================================================
 n_runs <- 30
 results <- matrix(NA, n_runs, 6)
-
 colnames(results) <- c(
   "FPCA_ARI","GNN_ARI",
   "FPCA_C","GNN_C",
@@ -265,81 +262,66 @@ for (r in 1:n_runs) {
   cat("\nRUN", r, "\n")
 
   # ---------------- FPCA ----------------
-  cl_fpca <- kmeans(X_fpca, 2, nstart=50)$cluster
-  names(cl_fpca) <- as.character(ids)
+  cl_fpca <- kmeans(X_fpca, 2, nstart = 50)$cluster
 
-  m_fpca <- get_metrics(cl_fpca, true_labels, subject_time)
+  fpca_df <- data.frame(RID=as.numeric(rownames(X_fpca)),
+                        cluster=cl_fpca)
+
+  fpca_merge <- merge(true_labels, fpca_df, by="RID")
+
+  ARI_fpca <- ARI(fpca_merge$dem, fpca_merge$cluster)
+
+  surv_fpca <- merge(true_labels, fpca_df, by="RID")
+  surv_fpca$time <- tapply(df$time, df$RID, max)[as.character(surv_fpca$RID)]
+
+  ci_fpca <- c_index(surv_fpca$time, surv_fpca$dem, surv_fpca$cluster)
+  lr_fpca <- logrank_stat(surv_fpca$time, surv_fpca$dem, surv_fpca$cluster)
 
   # ---------------- GNN ----------------
   gnn_out <- run_gnn()
 
-  # =========================================================
-  # SAFE GNN SUBJECT POOLING (FIXED)
-  # =========================================================
-
   emb <- gnn_out$emb
   sub <- gnn_out$sub
 
-  if (is.null(emb) || length(emb) == 0) {
-    stop("GNN returned empty embeddings")
-  }
+  subjects <- sort(unique(sub))
 
-  subjects <- unique(sub)
-
-  feat_list <- list()
-
-  for (s in subjects) {
-
+  feat <- do.call(rbind, lapply(subjects, function(s) {
     idx <- which(sub == s)
+    E <- emb[idx,,drop=FALSE]
+    c(colMeans(E), apply(E,2,sd))
+  }))
 
-    if (length(idx) == 0) next
-
-    E <- emb[idx, , drop = FALSE]
-
-    if (nrow(E) == 0) next
-
-    mu <- colMeans(E, na.rm = TRUE)
-
-    if (nrow(E) > 1) {
-      sdv <- apply(E, 2, sd, na.rm = TRUE)
-    } else {
-      sdv <- rep(0, ncol(E))
-    }
-
-    feat_list[[as.character(s)]] <- c(mu, sdv)
-  }
-
-  feat <- do.call(rbind, feat_list)
-
-  # safety checks
-  if (is.null(feat) || nrow(feat) < 2) {
-    stop("Not enough valid subjects after pooling GNN embeddings")
-  }
-
+  rownames(feat) <- subjects
   feat[!is.finite(feat)] <- 0
   feat <- scale(feat)
 
-  if (any(is.na(feat))) {
-    stop("NA values in feat after scaling")
-  }
+  cl_gnn <- kmeans(feat, 2, nstart=50)$cluster
 
-  cl_gnn <- kmeans(feat, centers = 2, nstart = 50)$cluster
-  names(cl_gnn) <- rownames(feat)
+  gnn_df <- data.frame(RID=as.numeric(subjects),
+                       cluster=cl_gnn)
 
-  m_gnn <- get_metrics(cl_gnn, true_labels, subject_time)
+  gnn_merge <- merge(true_labels, gnn_df, by="RID")
 
-  results[r,] <- c(
-    m_fpca$ARI, m_gnn$ARI,
-    m_fpca$C, m_gnn$C,
-    m_fpca$LR, m_gnn$LR
-  )
-  print(results)
-  cat("FPCA ARI:", m_fpca$ARI, " GNN ARI:", m_gnn$ARI, "\n")
+  ARI_gnn <- ARI(gnn_merge$dem, gnn_merge$cluster)
+
+  surv_gnn <- merge(true_labels, gnn_df, by="RID")
+  surv_gnn$time <- tapply(df$time, df$RID, max)[as.character(surv_gnn$RID)]
+
+  ci_gnn <- c_index(surv_gnn$time, surv_gnn$dem, surv_gnn$cluster)
+  lr_gnn <- logrank_stat(surv_gnn$time, surv_gnn$dem, surv_gnn$cluster)
+
+  # ---------------- STORE ----------------
+  results[r,] <- c(ARI_fpca, ARI_gnn,
+                   ci_fpca, ci_gnn,
+                   lr_fpca, lr_gnn)
+
+  cat("FPCA ARI:", ARI_fpca, "\n")
+  cat("GNN ARI:", ARI_gnn, "\n")
 }
 
 # =========================================================
-# FINAL
+# FINAL SUMMARY
 # =========================================================
-cat("\n===== FINAL =====\n")
+cat("\nFINAL RESULTS\n")
 print(colMeans(results, na.rm=TRUE))
-print(apply(results,2,sd,na.rm=TRUE))
+print(apply(results, 2, sd, na.rm=TRUE))

@@ -245,7 +245,7 @@ for (ii in 1:n_iter) {
   # =========================
   # CLUSTERING
   # =========================
-  cl_fpca <- kmeans(X_fpca, centers = 2, nstart = 100)$cluster
+  cl_fpca <- kmeans(X_fpca, centers = 3, nstart = 100)$cluster
   names(cl_fpca) <- rownames(X_fpca)
 
   merged_fpca <- merge(surv_fpca,
@@ -308,7 +308,7 @@ for (ii in 1:n_iter) {
   keep <- apply(feat, 1, function(x) all(is.finite(x)))
   feat <- feat[keep, , drop = FALSE]
 
-  cl_gnn <- kmeans(feat, centers = 2, nstart = 100)$cluster
+  cl_gnn <- kmeans(feat, centers = 3, nstart = 100)$cluster
   names(cl_gnn) <- rownames(feat)
 
   merged_gnn <- merge(surv_data,

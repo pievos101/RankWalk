@@ -4,6 +4,10 @@
 library(MASS)
 library(aricode)
 library(fda)
+library(MASS)
+library(fda)
+library(survival)
+library(survcomp)
 
 # =========================================================
 # LOAD DATA
@@ -62,6 +66,37 @@ paquid_clean[, vars] <- Ymat[keep, ]
 
 # remove invalid time
 paquid_clean <- paquid_clean[is.finite(paquid_clean$time), ]
+
+# =========================================================
+# SUBJECT-LEVEL SURVIVAL DATA
+# =========================================================
+
+surv_df <- do.call(
+  rbind,
+  lapply(split(paquid_clean, paquid_clean$ID), function(df) {
+
+    df <- df[order(df$age), ]
+
+    event <- any(df$dem == 1, na.rm = TRUE)
+
+    if (event) {
+      event_time <- min(df$age[df$dem == 1], na.rm = TRUE)
+    } else {
+      event_time <- max(df$age, na.rm = TRUE)
+    }
+
+    baseline_age <- min(df$age, na.rm = TRUE)
+
+    data.frame(
+      ID = unique(df$ID),
+      time = event_time - baseline_age,
+      event = as.numeric(event)
+    )
+  })
+)
+
+surv_df <- surv_df[is.finite(surv_df$time), ]
+
 
 # =========================================================
 # GROUND TRUTH (DEMENTIA STATUS)
@@ -141,24 +176,63 @@ X_fpca <- scale(X_fpca)
 # =========================================================
 # CLUSTERING (K = 2)
 # =========================================================
-set.seed(1)
+#set.seed(1)
 
-cl_fpca <- kmeans(X_fpca, centers = 2, nstart = 50)$cluster
+cl_fpca <- kmeans(X_fpca, centers = 3, nstart = 50)$cluster
 
 fpca_df <- data.frame(
   ID = as.numeric(rownames(X_fpca)),
   cluster = cl_fpca
 )
 
-merged <- merge(true_labels, fpca_df, by = "ID")
+# =========================================================
+# FPCA SURVIVAL EVALUATION
+# =========================================================
 
-# =========================================================
-# ARI
-# =========================================================
-ARI_fpca <- ARI(merged$dem, merged$cluster)
+fpca_eval <- merge(fpca_df, surv_df, by = "ID")
+
+fpca_eval$cluster <- factor(fpca_eval$cluster)
+
+# --------------------------
+# LOG-RANK TEST
+# --------------------------
+
+lr_fpca <- survdiff(
+  Surv(time, event) ~ cluster,
+  data = fpca_eval
+)
+
+logrank_fpca <- 1 - pchisq(
+  lr_fpca$chisq,
+  df = length(lr_fpca$n) - 1
+)
+
+# --------------------------
+# COX MODEL
+# --------------------------
+
+cox_fpca <- coxph(
+  Surv(time, event) ~ cluster,
+  data = fpca_eval
+)
+
+#risk_fpca <- predict(cox_fpca, type = "lp")
+
+# --------------------------
+# C-INDEX
+# --------------------------
+
+#cindex_fpca <- concordance.index(
+#  x = risk_fpca,
+#  surv.time = fpca_eval$time,
+#  surv.event = fpca_eval$event
+#)$c.index
+
+cindex_fpca = cox_fpca$concordance[6]
 
 cat("\n====================\n")
-cat("FPCA ARI:", ARI_fpca, "\n")
+cat("FPCA C-index :", round(cindex_fpca, 3), "\n")
+cat("FPCA LogRank :", signif(logrank_fpca, 4), "\n")
 cat("====================\n")
 
 # =========================================================
@@ -183,9 +257,9 @@ def run_rankwalk_gnn(df, epochs=120):
 
     G, _ = build_temporal_graph_grid(
         df,
-        k_similarity=10,
-        n_bins=3,
-        overlap=0.5
+        k_similarity=5,
+        n_bins=5,
+        overlap=0.7
     )
 
     nodes = list(G.nodes())
@@ -267,35 +341,96 @@ sub <- as.numeric(res$subjects)
 
 subjects <- sort(unique(sub))
 
+# =========================================================
+# FLATTEN NODE EMBEDDINGS PER SUBJECT
+# =========================================================
+
 feat <- lapply(subjects, function(g) {
+
   idx <- which(sub == g)
-  colMeans(emb[idx, , drop = FALSE])
+
+  E <- emb[idx, , drop = FALSE]
+
+  as.numeric(t(E))
 })
 
-feat <- do.call(rbind, feat)
+# ensure equal length vectors
+max_len <- max(sapply(feat, length))
+
+feat <- t(sapply(feat, function(x) {
+  c(x, rep(0, max_len - length(x)))
+}))
+
 rownames(feat) <- subjects
+
+feat[!is.finite(feat)] <- 0
+
 feat <- scale(feat)
 
 # =========================================================
 # GNN CLUSTERING
 # =========================================================
-cl_gnn <- kmeans(feat, centers = 2, nstart = 50)$cluster
+cl_gnn <- kmeans(feat, centers = 3, nstart = 50)$cluster
 
 gnn_df <- data.frame(
   ID = as.numeric(names(cl_gnn)),
   cluster = cl_gnn
 )
 
-gnn_merged <- merge(true_labels, gnn_df, by = "ID")
-
-ARI_gnn <- ARI(gnn_merged$dem, gnn_merged$cluster)
-
-cat("GNN ARI:", ARI_gnn, "\n")
-
 # =========================================================
-# FINAL SUMMARY
+# GNN SURVIVAL EVALUATION
 # =========================================================
+
+gnn_eval <- merge(gnn_df, surv_df, by = "ID")
+
+gnn_eval$cluster <- factor(gnn_eval$cluster)
+
+# --------------------------
+# LOG-RANK TEST
+# --------------------------
+
+lr_gnn <- survdiff(
+  Surv(time, event) ~ cluster,
+  data = gnn_eval
+)
+
+logrank_gnn <- 1 - pchisq(
+  lr_gnn$chisq,
+  df = length(lr_gnn$n) - 1
+)
+
+# --------------------------
+# COX MODEL
+# --------------------------
+
+cox_gnn <- coxph(
+  Surv(time, event) ~ cluster,
+  data = gnn_eval
+)
+
+#risk_gnn <- predict(cox_gnn, type = "lp")
+
+# --------------------------
+# C-INDEX
+# --------------------------
+
+#cindex_gnn <- concordance.index(
+#  x = risk_gnn,
+#  surv.time = gnn_eval$time,
+#  surv.event = gnn_eval$event
+#)$c.index
+
+cindex_gnn = cox_gnn$concordance[6]
+
+cat("GNN C-index :", round(cindex_gnn, 3), "\n")
+cat("GNN LogRank :", signif(logrank_gnn, 4), "\n")
+
 cat("\n====================\n")
-cat("FPCA ARI:", ARI_fpca, "\n")
-cat("GNN ARI:", ARI_gnn, "\n")
+cat("FPCA RESULTS\n")
+cat("  C-index :", round(cindex_fpca, 3), "\n")
+cat("  LogRank :", signif(logrank_fpca, 4), "\n\n")
+
+cat("GNN RESULTS\n")
+cat("  C-index :", round(cindex_gnn, 3), "\n")
+cat("  LogRank :", signif(logrank_gnn, 4), "\n")
 cat("====================\n")
