@@ -166,10 +166,11 @@ def run_ts2vec_official(df, epochs=100):
 # =========================================================
 n_iter <- 50
 
-RES <- matrix(NaN, n_iter, 2)
+RES <- matrix(NaN, n_iter, 3)
 
 colnames(RES) <- c(
   "fPCA_KMeans",
+  "mFPCA_splines",
   "RankWalk_GNN"
 )
 
@@ -318,6 +319,72 @@ ari_fpca <- ARI(
 
 cat("ARI fPCA:", ari_fpca, "\n")
 
+# =====================================================
+# mFPCA + KMeans (SPLINES FIXED VERSION)
+# =====================================================
+cat("mFPCA + KMeans (splines)\n")
+
+library(funData)
+library(MFPCA)
+
+global_grid <- seq(min(Longdat2$time), max(Longdat2$time), length.out = 51)
+
+multi_list <- lapply(1:outcomes, function(m) {
+
+  X_mat <- matrix(NA, nrow = length(subjects), ncol = length(global_grid))
+
+  for (s in seq_along(subjects)) {
+
+    sub <- Longdat2[
+      Longdat2$subject == subjects[s] &
+      Longdat2$outcome == m, ]
+
+    if (nrow(sub) < 2) next
+
+    X_mat[s, ] <- approx(
+      sub$time,
+      sub$y,
+      xout = global_grid,
+      rule = 2
+    )$y
+  }
+
+  funData(argvals = global_grid, X = X_mat)
+})
+
+mFD <- multiFunData(multi_list)
+
+# -----------------------------------------------------
+# IMPORTANT FIX: use splines1D (NOT PACE)
+# -----------------------------------------------------
+uniExp <- replicate(
+  length(mFD),
+  list(type = "splines1D", k = 10),
+  simplify = FALSE
+)
+
+# -----------------------------------------------------
+# Multivariate FPCA
+# -----------------------------------------------------
+mfpca_res <- MFPCA(
+  mFD,
+  M = 2,
+  uniExpansions = uniExp
+)
+
+# -----------------------------------------------------
+# Scores + clustering
+# -----------------------------------------------------
+mfpca_scores <- mfpca_res$scores
+
+ari_mfpca <- ARI(
+  trueClusIDs,
+  kmeans(scale(mfpca_scores), 4, nstart = 25)$cluster
+)
+
+cat("ARI mFPCA:", ari_mfpca, "\n")
+  
+
   # =====================================================
   # RankWalk GNN
   # =====================================================
@@ -343,7 +410,7 @@ cat("ARI fPCA:", ari_fpca, "\n")
   # =====================================================
   # STORE RESULTS
   # =====================================================
-  RES[ii, ] <- c(ari_fpca, ari_gnn)
+  RES[ii, ] <- c(ari_fpca, ari_mfpca, ari_gnn)
 
   print(RES)
 }
