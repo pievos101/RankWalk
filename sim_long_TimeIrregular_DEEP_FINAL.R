@@ -112,8 +112,8 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 # TS2VEC OFFICIAL
 # =========================================================
 import sys
-sys.path.append('/home/bpfeif/GitHub/ts2vec')
-#sys.path.append('/home/bastian/GitHub/ts2vec')
+#sys.path.append('/home/bpfeif/GitHub/ts2vec')
+sys.path.append('/home/bastian/GitHub/ts2vec')
 
 from ts2vec import TS2Vec
 
@@ -189,14 +189,14 @@ for (ii in 1:n_iter) {
 
   print(r_sigma_diag)
 
-  #Longdat2 <- simLongData(
-  #  ranTimes = TRUE,
-  #  n_i = 10,
-  #  eta = r_eta,
-  #  sigma_diag = r_sigma_diag
-  #)
+  Longdat2 <- simLongData(
+    ranTimes = TRUE,
+    n_i = 10,
+    eta = r_eta,
+    sigma_diag = r_sigma_diag
+  )
 
-  Longdat2 = simLongData_hard()
+  #Longdat2 = simLongData_hard()
 
   # =====================================================
   # WIDE FORMAT
@@ -264,7 +264,7 @@ for (m in 1:outcomes) {
   fpca_res <- fdapace::FPCA(
     Ly = Ly,
     Lt = Lt,
-    optns = list(dataType = "Sparse", nRegGrid = 51)
+    optns = list(dataType = "Sparse")#, nRegGrid = 51)
   )
   
   if(fpca_res$selectK == 1){
