@@ -358,7 +358,7 @@ for (ii in 1:n_iter) {
 
   ari7 <- ARI(
     trueClusIDs,
-    kmeans(scale(do.call(rbind, feat)), 4, nstart = 25)$cluster
+    kmeans(scale(do.call(rbind, feat)), 4, nstart = 50)$cluster
   )
 
   cat("ARI RankWalk:", ari7, "\n")
@@ -375,6 +375,9 @@ for (ii in 1:n_iter) {
 # =========================================================
 # PLOT RESULTS
 # =========================================================
+library(ggplot2)
+library(reshape)
+
 RES_df <- as.data.frame(RES)
 RES_m <- melt(RES_df)
 colnames(RES_m) = c("Method", "value")

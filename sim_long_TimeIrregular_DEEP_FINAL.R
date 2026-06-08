@@ -79,7 +79,7 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
     t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
     t = (t - t.mean()) / (t.std() + 1e-8)
 
-    x = torch.cat([x, t], dim=1)
+    #x = torch.cat([x, t], dim=1)
 
     edges, et = [], []
 
@@ -184,20 +184,20 @@ for (ii in 1:n_iter) {
   cat("\n================ ITER", ii, "================\n")
 
   r_eta = 3
-  r_sigma_diag = rep(5, 5)
-  #id = sample(1:5, 1)
-  #r_sigma_diag[id] = sample(5:20, 1)
+  r_sigma_diag = rep(3, 5)
+  id = sample(1:5, 1)
+  r_sigma_diag[id] = sample(5:20, 1)
 
-  print(r_sigma_diag)
+  #print(r_sigma_diag)
 
-  Longdat2 <- simLongData(
-    ranTimes = TRUE,
-    n_i = 10,
-    eta = r_eta,
-    sigma_diag = r_sigma_diag
-  )
+  #Longdat2 <- simLongData(
+  #  ranTimes = TRUE,
+  #  n_i = 10,
+  #  eta = r_eta,
+  #  sigma_diag = r_sigma_diag
+  #)
 
-  #Longdat2 = simLongData_hard()
+  Longdat2 = simLongData_hard()
 
   # =====================================================
   # WIDE FORMAT
@@ -402,7 +402,7 @@ cat("ARI mFPCA:", ari_mfpca, "\n")
 
   ari_gnn <- ARI(
     trueClusIDs,
-    kmeans(scale(do.call(rbind, feat)), 4, nstart = 25)$cluster
+    kmeans(scale(do.call(rbind, feat)), 4, nstart = 50)$cluster
   )
 
   cat("ARI RankWalk:", ari_gnn, "\n")
