@@ -79,6 +79,7 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
     t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
     t = (t - t.mean()) / (t.std() + 1e-8)
 
+    # thats not good for irregular time
     #x = torch.cat([x, t], dim=1)
 
     edges, et = [], []
