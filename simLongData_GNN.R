@@ -5,7 +5,8 @@ simLongData_hard <- function(
   outcomes = 5,
   eta = 0.8,          # easier: was 1.2
   ranTimes = TRUE,
-  max_time = 12,
+  max_time = 10,
+  missing = FALSE,
   seed = 1
 ) {
 
@@ -190,9 +191,9 @@ simLongData_hard <- function(
       } else {
 
         times <- seq(
-          0,
+          1,
           max_time,
-          length.out = 12
+          length.out = 10
         )
       }
 
@@ -264,9 +265,13 @@ simLongData_hard <- function(
           severity <- 0
         }
 
-        obs_prob <- sampling_prob(
-          severity
-        )
+        if(missing){
+          obs_prob <- sampling_prob(
+            severity
+          )
+        }else{
+          obs_prob = 1
+        }
 
         for (h in 1:outcomes) {
 
