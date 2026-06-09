@@ -48,7 +48,7 @@ def run_rankwalk_gnn(df, epochs=120):
     t = torch.tensor(t, dtype=torch.float32, device=device).unsqueeze(1)
 
     t = (t - t.mean()) / (t.std() + 1e-8)
-    #x = torch.cat([x, t], dim=1)
+    x = torch.cat([x, t], dim=1)
 
     edges, et = [], []
     for u, v, a in G.edges(data=True):
