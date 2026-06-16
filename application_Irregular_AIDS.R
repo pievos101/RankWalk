@@ -217,9 +217,9 @@ def run_rankwalk_gnn(df, epochs=120):
 
         lr=1e-3,
 
-        walk_length=20,
+        walk_length=15,
 
-        top_k=10,
+        top_k=5,
 
         device=device
 
@@ -784,7 +784,7 @@ res <- py$run_rankwalk_gnn(
 
 Longdat2,
 
-100L
+200L
 
 )
 
