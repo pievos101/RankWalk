@@ -926,7 +926,84 @@ print(RES)
 }
 
 
+library(ggplot2)
+library(gridExtra)
 
+# =========================================================
+# RES must already exist
+# columns:
+# FPCA_Cindex FPCA_Chisq GNN_Cindex GNN_Chisq
+# =========================================================
+
+RES <- as.data.frame(RES)
+
+# =========================================================
+# CREATE DATA FRAMES (base R only)
+# =========================================================
+
+df_cindex <- data.frame(
+  FPCA = RES$FPCA_Cindex,
+  GNN  = RES$GNN_Cindex
+)
+
+df_chisq <- data.frame(
+  FPCA = RES$FPCA_Chisq,
+  GNN  = RES$GNN_Chisq
+)
+
+# =========================================================
+# SUMMARY FUNCTION (mean + sd) - base R
+# =========================================================
+
+summarise_df <- function(df) {
+  data.frame(
+    Method = c("FPCA", "GNN"),
+    Mean = c(mean(df$FPCA, na.rm = TRUE),
+             mean(df$GNN, na.rm = TRUE)),
+    SD = c(sd(df$FPCA, na.rm = TRUE),
+           sd(df$GNN, na.rm = TRUE))
+  )
+}
+
+sum_cindex <- summarise_df(df_cindex)
+sum_chisq  <- summarise_df(df_chisq)
+
+# =========================================================
+# PLOT 1: C-index
+# =========================================================
+
+p1 <- ggplot(sum_cindex, aes(x = Method, y = Mean, fill = Method)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_errorbar(
+    aes(ymin = Mean - SD, ymax = Mean + SD),
+    width = 0.2
+  ) +
+  ylim(0, 1) +
+  ggtitle("C-index (FPCA vs GNN)") +
+  ylab("C-index") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# =========================================================
+# PLOT 2: Chi-square
+# =========================================================
+
+p2 <- ggplot(sum_chisq, aes(x = Method, y = Mean, fill = Method)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_errorbar(
+    aes(ymin = Mean - SD, ymax = Mean + SD),
+    width = 0.2
+  ) +
+  ggtitle("Log-rank Chi-square (FPCA vs GNN)") +
+  ylab("Chi-square") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# =========================================================
+# SIDE-BY-SIDE PLOTS (gridExtra)
+# =========================================================
+
+grid.arrange(p1, p2, ncol = 2)
 
 
 
