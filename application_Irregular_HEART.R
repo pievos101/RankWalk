@@ -42,7 +42,7 @@ def run_rankwalk_gnn(df, epochs=120):
         df,
         k_similarity=10,
         n_bins=5,
-        overlap=0.5
+        overlap=0.8
     )
 
     nodes = list(G.nodes())
@@ -109,8 +109,8 @@ def run_rankwalk_gnn(df, epochs=120):
         J,
         epochs=epochs,
         lr=1e-3,
-        walk_length=20,
-        top_k=10,
+        walk_length=5,
+        top_k=5,
         device=device
     )
 
