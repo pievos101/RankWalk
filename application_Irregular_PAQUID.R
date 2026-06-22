@@ -925,7 +925,6 @@ print(RES)
 
 }
 
-
 library(ggplot2)
 library(gridExtra)
 
@@ -938,73 +937,65 @@ library(gridExtra)
 RES <- as.data.frame(RES)
 
 # =========================================================
-# CREATE DATA FRAMES (base R only)
+# LONG FORMAT (base R only)
 # =========================================================
 
-df_cindex <- data.frame(
-  FPCA = RES$FPCA_Cindex,
-  GNN  = RES$GNN_Cindex
+df_cindex_long <- data.frame(
+  value = c(RES$FPCA_Cindex, RES$GNN_Cindex),
+  Method = rep(c("FPCA", "GNN"), each = nrow(RES))
 )
 
-df_chisq <- data.frame(
-  FPCA = RES$FPCA_Chisq,
-  GNN  = RES$GNN_Chisq
+df_chisq_long <- data.frame(
+  value = c(RES$FPCA_Chisq, RES$GNN_Chisq),
+  Method = rep(c("FPCA", "GNN"), each = nrow(RES))
 )
 
 # =========================================================
-# SUMMARY FUNCTION (mean + sd) - base R
+# CLEAN THEME
 # =========================================================
 
-summarise_df <- function(df) {
-  data.frame(
-    Method = c("FPCA", "GNN"),
-    Mean = c(mean(df$FPCA, na.rm = TRUE),
-             mean(df$GNN, na.rm = TRUE)),
-    SD = c(sd(df$FPCA, na.rm = TRUE),
-           sd(df$GNN, na.rm = TRUE))
+theme_nice <- theme_minimal(base_size = 13) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    legend.position = "none",
+    plot.title = element_text(face = "bold", hjust = 0.5)
   )
-}
-
-sum_cindex <- summarise_df(df_cindex)
-sum_chisq  <- summarise_df(df_chisq)
 
 # =========================================================
-# PLOT 1: C-index
+# PLOT 1: C-index (box + jitter)
 # =========================================================
 
-p1 <- ggplot(sum_cindex, aes(x = Method, y = Mean, fill = Method)) +
-  geom_bar(stat = "identity", width = 0.6) +
-  geom_errorbar(
-    aes(ymin = Mean - SD, ymax = Mean + SD),
-    width = 0.2
-  ) +
+p1 <- ggplot(df_cindex_long, aes(x = Method, y = value, fill = Method)) +
+  geom_boxplot(width = 0.5, alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.12, alpha = 0.25, size = 1) +
   ylim(0, 1) +
-  ggtitle("C-index (FPCA vs GNN)") +
-  ylab("C-index") +
-  theme_minimal() +
-  theme(legend.position = "none")
-
-# =========================================================
-# PLOT 2: Chi-square
-# =========================================================
-
-p2 <- ggplot(sum_chisq, aes(x = Method, y = Mean, fill = Method)) +
-  geom_bar(stat = "identity", width = 0.6) +
-  geom_errorbar(
-    aes(ymin = Mean - SD, ymax = Mean + SD),
-    width = 0.2
+  labs(
+    title = "C-index: FPCA vs GNN",
+    x = NULL,
+    y = "C-index"
   ) +
-  ggtitle("Log-rank Chi-square (FPCA vs GNN)") +
-  ylab("Chi-square") +
-  theme_minimal() +
-  theme(legend.position = "none")
+  theme_nice
 
 # =========================================================
-# SIDE-BY-SIDE PLOTS (gridExtra)
+# PLOT 2: Chi-square (box + jitter)
+# =========================================================
+
+p2 <- ggplot(df_chisq_long, aes(x = Method, y = value, fill = Method)) +
+  geom_boxplot(width = 0.5, alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.12, alpha = 0.25, size = 1) +
+  labs(
+    title = "Log-rank Chi-square: FPCA vs GNN",
+    x = NULL,
+    y = "Chi-square"
+  ) +
+  theme_nice
+
+# =========================================================
+# SIDE-BY-SIDE DISPLAY
 # =========================================================
 
 grid.arrange(p1, p2, ncol = 2)
-
 
 
 
