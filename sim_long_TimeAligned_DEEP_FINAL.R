@@ -108,7 +108,7 @@ def run_rankwalk_gnn(df, epochs=300, lr=1e-3, top_k=10, walk_length=20):
 # TS2VEC OFFICIAL
 # =========================================================
 import sys
-sys.path.append('/home/bpfeif/GitHub/ts2vec')
+sys.path.append('/home/bastian/GitHub/ts2vec')
 
 from ts2vec import TS2Vec
 
@@ -183,19 +183,19 @@ for (ii in 1:n_iter) {
   cat("\n================ ITER", ii, "================\n")
 
   r_eta = 3
-  r_sigma_diag = rep(5, 5)
+  r_sigma_diag = rep(7, 5)
   id = sample(1:5, 1)
-  r_sigma_diag[id] =  sample(5:20, 1)
+  #r_sigma_diag[id] =  sample(5:20, 1)
   #print(r_sigma_diag)
 
-  #Longdat2 <- simLongData(
-  #  ranTimes = FALSE,
-  #  n_i = 10,
-  #  eta = r_eta,
-  #  sigma_diag = r_sigma_diag
-  #)
+  Longdat2 <- simLongData(
+    ranTimes = FALSE,
+    n_i = 10,
+    eta = r_eta,
+    sigma_diag = r_sigma_diag
+  )
 
-  Longdat2 = simLongData_hard(ranTimes = FALSE)
+  #Longdat2 = simLongData_hard(ranTimes = FALSE)
 
 
   Longdat2_wide <- reshape(
@@ -393,6 +393,36 @@ ggplot(RES_m, aes(x = Method, y = value, fill = Method)) +
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
+### EVEN NICER
+
+library(ggplot2)
+library(reshape)
+
+RES_df <- as.data.frame(RES)
+
+# reshape (base-style via reshape package)
+RES_m <- melt(RES_df)
+colnames(RES_m) <- c("Method", "ARI")
+
+# order methods by median ARI
+RES_m$Method <- reorder(RES_m$Method, RES_m$ARI, FUN = median)
+
+ggplot(RES_m, aes(x = Method, y = ARI, fill = Method)) +
+  geom_violin(trim = FALSE, alpha = 0.4, color = NA) +
+  geom_boxplot(width = 0.15, outlier.shape = NA, alpha = 0.7) +
+  geom_jitter(width = 0.08, alpha = 0.4, size = 1) +
+  coord_cartesian(ylim = c(0, 1)) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 35, hjust = 1),
+    panel.grid.major.x = element_blank()
+  ) +
+  labs(
+    x = "Method",
+    y = "Adjusted Rand Index (ARI)"
+  )
 
 # =========================================================
 # PAIRWISE DOMINANCE HEATMAP (TIES EXCLUDED)
