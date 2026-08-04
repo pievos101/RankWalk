@@ -164,20 +164,16 @@ G, labels_df = build_temporal_graph(df, k_similarity=5)
 ```python
 node_list = list(G.nodes())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 x_list, t_list = [], []
 
 for n in node_list:
     x_list.append(G.nodes[n]['features'])
     t_list.append(G.nodes[n]['time'])
 
-    x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
+x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
 
-    t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
-    t = (t - t.mean()) / (t.std() + 1e-8)
-
-    #x = torch.cat([x, t], dim=1)
-
-    edges, et = [], []
+edges, et = [], []
 
 for u, v, a in G.edges(data=True):
     edges.append([u, v])
@@ -200,7 +196,6 @@ from rankwalk import (
     compute_jaccard_fast,
     build_temporal_graph
 )
-
 
 J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
 
