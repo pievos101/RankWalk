@@ -85,7 +85,7 @@ emb_gnn = train_gnn(
     top_k=top_k
 )
 
-print("StartAnchor GNN embedding shape:", emb_gnn.shape)
+print("RankWalk embedding shape:", emb_gnn.shape)
 
 # --------------------------
 # Node2Vec baseline
