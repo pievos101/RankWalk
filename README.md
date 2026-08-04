@@ -98,8 +98,8 @@ def run_node2vec(G, dim=48):
         num_walks=100,
         p=1,
         q=1,
-        workers=1,
-        seed=42
+        workers=1#,
+        #seed=42
     )
     model = node2vec.fit(window=10, min_count=1, batch_words=128)
 
@@ -133,7 +133,89 @@ print(f"Node2Vec | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 
 ## Example Usage on Longitudinal Multivariate Data
 
-coming soon ...
+Let us simulate some longitudinal data using the R-package [TAPIO]{https://github.com/pievos101/TAPIO}
+
+### Simulated Longitudinal Data
+
+```R
+library(TAPIO)
+
+df <- TAPIO::simLongData(
+    ranTimes = FALSE,
+    n_i = 10,
+    eta = 3,
+    sigma_diag = c(5,5,5,5,5)
+  )
+```
+
+The above code generates data consisting of five longitudinal variables.
+
+### Converting Tabular Data to Temporal Graph
+```python
+import numpy as np
+import pandas as pd
+
+df = pd.DataFrame(df)
+G, labels_df = build_temporal_graph(df, k_similarity=5)
+```
+
+### Enrich Nodes with Longitudinal Values
+
+```python
+node_list = list(G.nodes())
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+x_list, t_list = [], []
+
+for n in node_list:
+    x_list.append(G.nodes[n]['features'])
+    t_list.append(G.nodes[n]['time'])
+
+    x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
+
+    t = torch.tensor(t_list, dtype=torch.float32, device=device).unsqueeze(1)
+    t = (t - t.mean()) / (t.std() + 1e-8)
+
+    #x = torch.cat([x, t], dim=1)
+
+    edges, et = [], []
+
+for u, v, a in G.edges(data=True):
+    edges.append([u, v])
+    et.append(a['edge_type'])
+    edges.append([v, u])
+    et.append(a['edge_type'])
+
+edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous()
+edge_type = torch.tensor(et, dtype=torch.long, device=device)
+```
+
+### Run RankWalk on the Temporal Graph
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
+
+epochs=300
+lr=1e-3
+top_k=10
+walk_length=20
+
+emb = train_gnn(
+    x, edge_index, edge_type, J,
+    epochs=epochs,
+    lr=lr,
+    walk_length=walk_length,
+    top_k=top_k,
+    device=device
+)
+
+embeddings = emb.detach().cpu().numpy()
+subjects =  np.array([G.nodes[n]['subject'] for n in node_list])
+```
+
+Note, subject-wise mean pooling is suggested before clustering. 
 
 ## Citation
 
