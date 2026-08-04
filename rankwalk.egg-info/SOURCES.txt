@@ -7,6 +7,7 @@ rankwalk/build_temporal_graph.py
 rankwalk/contrastive.py
 rankwalk/data.py
 rankwalk/gnn.py
+rankwalk/gnn_old.py
 rankwalk/utils.py
 rankwalk/version.py
 rankwalk.egg-info/PKG-INFO
