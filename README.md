@@ -130,3 +130,18 @@ ari_n2v, nmi_n2v = evaluate(emb_n2v, labels)
 print(f"StartAnchor GNN | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
 print(f"Node2Vec        | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 ```
+
+
+## Citation
+
+If you find {RankWalk} useful please cite [the paper](https://arxiv.org/abs/2607.25609):
+
+```
+@article{pfeifer2026contrastive,
+  title={Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs},
+  author={Pfeifer, Bastian},
+  journal={arXiv preprint arXiv:2607.25609},
+  year={2026}
+}
+
+```
