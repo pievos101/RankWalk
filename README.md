@@ -195,6 +195,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from rankwalk import (
+    train_gnn,
+    compute_jaccard_fast,
+    build_temporal_graph
+)
+
+
 J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
 
 epochs=300
