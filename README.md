@@ -26,10 +26,7 @@ python3 -m venv rankwalk-venv
 source rankwalk-venv/bin/activate  # Linux/macOS
 # .\rankwalk-venv\Scripts\activate  # Windows
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Install the package in editable mode
+# Install the package 
 pip install -e .
 ```
 
@@ -74,11 +71,14 @@ J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 # --------------------------
 walk_length = 20
 top_k = 10
-epochs = 300
+epochs = 100
 lr = 1e-3
 
 emb_gnn = train_gnn(
-    x, edge_index, J,
+    x=x, 
+    edge_index=edge_index,
+    edge_type=None,
+    J=J,
     epochs=epochs,
     lr=lr,
     walk_length=walk_length,
@@ -115,6 +115,7 @@ print("Node2Vec embedding shape:", emb_n2v.shape)
 # Evaluate embeddings
 # --------------------------
 def evaluate(emb, labels):
+    from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
     emb_np = emb.detach().cpu().numpy() if isinstance(emb, torch.Tensor) else emb
     labels_np = labels.cpu().numpy() if isinstance(labels, torch.Tensor) else labels
     k = len(set(labels_np))

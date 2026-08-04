@@ -138,7 +138,7 @@ def train_gnn(
 
     x = x.to(device)
     edge_index = edge_index.to(device)
-    edge_type = edge_type.to(device)
+    #edge_type = edge_type.to(device)
     J = J.to(device)
 
     model = FeatureAwareRGNN(
