@@ -185,7 +185,7 @@ edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous
 edge_type = torch.tensor(et, dtype=torch.long, device=device)
 ```
 
-### Run RankWalk on the Temporal Graph
+### Run RankWalk on Temporal Graph
 ```python
 import torch
 import torch.nn as nn
