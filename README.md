@@ -30,7 +30,7 @@ source rankwalk-venv/bin/activate  # Linux/macOS
 pip install -e .
 ```
 
-## Example Usage
+## Example Usage on Graphs
 
 ```python
 import torch
@@ -71,7 +71,7 @@ J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 # --------------------------
 walk_length = 20
 top_k = 10
-epochs = 100
+epochs = 300
 lr = 1e-3
 
 emb_gnn = train_gnn(
@@ -131,6 +131,9 @@ print(f"StartAnchor GNN | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
 print(f"Node2Vec        | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 ```
 
+## Example Usage on Longitudinal Data
+
+coming soon ...
 
 ## Citation
 
