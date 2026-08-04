@@ -127,8 +127,8 @@ def evaluate(emb, labels):
 ari_gnn, nmi_gnn = evaluate(emb_gnn, labels)
 ari_n2v, nmi_n2v = evaluate(emb_n2v, labels)
 
-print(f"StartAnchor GNN | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
-print(f"Node2Vec        | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
+print(f"RankWalk | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
+print(f"Node2Vec | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 ```
 
 ## Example Usage on Longitudinal Multivariate Data
