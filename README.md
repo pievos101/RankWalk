@@ -133,7 +133,7 @@ print(f"Node2Vec | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 
 ## Example Usage on Longitudinal Multivariate Data
 
-Let us simulate some longitudinal data using the R-package [TAPIO]{https://github.com/pievos101/TAPIO}
+Let us simulate some longitudinal data using the R-package [TAPIO](https://github.com/pievos101/TAPIO):
 
 ### Simulated Longitudinal Data
 
