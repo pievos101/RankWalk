@@ -1,4 +1,7 @@
 # RankWalk
+<p align="center">
+<img src="https://github.com/pievos101/TAPIO/blob/main/RanWalk_Logo.png" width="400">
+</p>
 
 **RankWalk** is a Python library for **node representation learning** using start-node anchored random walks on graphs, combined with contrastive learning via a lightweight GNN. 
 
