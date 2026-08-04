@@ -18,7 +18,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/RankWalk.git
+git clone https://github.com/pievos101/RankWalk.git
 cd RankWalk
 
 # Optional: create and activate a virtual environment
@@ -131,7 +131,7 @@ print(f"StartAnchor GNN | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
 print(f"Node2Vec        | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 ```
 
-## Example Usage on Longitudinal Data
+## Example Usage on Longitudinal Multivariate Data
 
 coming soon ...
 
