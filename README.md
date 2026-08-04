@@ -131,7 +131,7 @@ print(f"RankWalk | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
 print(f"Node2Vec | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
 ```
 
-## Example Usage on Longitudinal Multivariate Data
+## Example Usage: Longitudinal Multivariate Tabular Data
 
 Let us simulate some longitudinal data using the R-package [TAPIO](https://github.com/pievos101/TAPIO):
 
