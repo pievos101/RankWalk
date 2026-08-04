@@ -154,6 +154,7 @@ The above code generates data consisting of five longitudinal variables.
 ```python
 import numpy as np
 import pandas as pd
+from rankwalk import build_temporal_graph
 
 df = pd.DataFrame(df)
 G, labels_df = build_temporal_graph(df, k_similarity=5)
@@ -191,11 +192,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from rankwalk import (
-    train_gnn,
-    compute_jaccard_fast,
-    build_temporal_graph
-)
+from rankwalk import train_gnn, compute_jaccard_fast
 
 J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
 
