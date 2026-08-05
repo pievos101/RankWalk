@@ -196,7 +196,7 @@ G, labels_df = build_temporal_graph_grid(
     )
 ```
 
-### Enrich Nodes with Longitudinal Values
+### After Graph Construction we Enrich Nodes with Longitudinal Values
 
 ```python
 import torch
