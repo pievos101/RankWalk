@@ -146,6 +146,8 @@ df <- TAPIO::simLongData(
     eta = 3,
     sigma_diag = c(5,5,5,5,5)
   )
+
+write.table(df, file="df.txt")
 ```
 
 The above code generates data consisting of five longitudinal variables.
@@ -156,13 +158,19 @@ import numpy as np
 import pandas as pd
 from rankwalk import build_temporal_graph
 
-df = pd.DataFrame(df)
+df = pd.read_table("df.txt", sep=r"\s+")
+print(df.head())
+
 G, labels_df = build_temporal_graph(df, k_similarity=5)
 ```
 
 ### Enrich Nodes with Longitudinal Values
 
 ```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 node_list = list(G.nodes())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -196,10 +204,10 @@ from rankwalk import train_gnn, compute_jaccard_fast
 
 J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
 
-epochs=300
+epochs=100
 lr=1e-3
-top_k=10
-walk_length=20
+top_k=5
+walk_length=10
 
 emb = train_gnn(
     x, edge_index, edge_type, J,
@@ -212,9 +220,56 @@ emb = train_gnn(
 
 embeddings = emb.detach().cpu().numpy()
 subjects =  np.array([G.nodes[n]['subject'] for n in node_list])
+print("RankWalk embedding shape:", embeddings.shape)
+
 ```
 
 Note, subject-wise mean pooling is suggested before clustering. 
+
+```python
+unique_subjects = np.unique(subjects)
+
+subject_embeddings = np.vstack([
+    embeddings[subjects == s].mean(axis=0)
+    for s in unique_subjects
+])
+
+print(subject_embeddings.shape)
+```
+Let's apply kmeans clustering:
+
+```python
+from sklearn.cluster import KMeans
+
+k = 4  # number of clusters
+
+km = KMeans(
+    n_clusters=k,
+    n_init=20
+)
+
+labels = km.fit_predict(subject_embeddings)
+```
+
+Let us check the clustering performance:
+
+```python
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+
+# One true label per subject
+true_labels = (
+    df.groupby("subject")["cluster"]
+      .first()
+      .to_numpy()
+)
+
+ari = adjusted_rand_score(true_labels, labels)
+nmi = normalized_mutual_info_score(true_labels, labels)
+
+print(f"ARI = {ari:.3f}")
+print(f"NMI = {nmi:.3f}")
+
+```
 
 ## Citation
 
