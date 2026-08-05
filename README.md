@@ -159,9 +159,41 @@ import pandas as pd
 from rankwalk import build_temporal_graph
 
 df = pd.read_table("df.txt", sep=r"\s+")
-print(df.head())
+print(df.head(20))
 
 G, labels_df = build_temporal_graph(df, k_similarity=5)
+```
+
+#### The Case of Irregular Time Measures
+
+```R
+library(TAPIO)
+
+df <- TAPIO::simLongData(
+    ranTimes = TRUE, # irregular time
+    n_i = 10,
+    eta = 3,
+    sigma_diag = c(5,5,5,5,5)
+  )
+
+write.table(df, file="df.txt")
+```
+In case of irregular time we apply a sliding window approach:
+
+```python
+import numpy as np
+import pandas as pd
+from rankwalk import build_temporal_graph_grid
+
+df = pd.read_table("df.txt", sep=r"\s+")
+print(df.head(20))
+
+G, labels_df = build_temporal_graph_grid(
+        df,
+        k_similarity=5,
+        n_bins=5,
+        overlap=0.5  
+    )
 ```
 
 ### Enrich Nodes with Longitudinal Values
@@ -195,6 +227,7 @@ edge_type = torch.tensor(et, dtype=torch.long, device=device)
 ```
 
 ### Run RankWalk on Temporal Graph
+
 ```python
 import torch
 import torch.nn as nn
