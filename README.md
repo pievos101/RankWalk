@@ -239,8 +239,8 @@ J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
 
 epochs=100
 lr=1e-3
-top_k=5
-walk_length=10
+top_k=10
+walk_length=20
 
 emb = train_gnn(
     x, edge_index, edge_type, J,
