@@ -269,6 +269,32 @@ subject_embeddings = np.vstack([
 
 print(subject_embeddings.shape)
 ```
+or Flattening + Interpolation:
+
+```python
+from scipy.interpolate import interp1d
+
+T_new = 8
+
+subject_embeddings  = []
+
+for s in np.sort(np.unique(subjects)):
+    E = embeddings[subjects == s]
+
+    old_t = np.linspace(0,1,len(E))
+    new_t = np.linspace(0,1,T_new)
+
+    E_new = interp1d(
+        old_t,
+        E,
+        axis=0
+    )(new_t)
+
+    subject_embeddings.append(E_new.flatten())
+
+subject_embeddings  = np.vstack(subject_embeddings)
+```
+
 Let's apply kmeans clustering:
 
 ```python
