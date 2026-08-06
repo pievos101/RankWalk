@@ -298,6 +298,7 @@ subject_embeddings  = np.vstack(subject_embeddings)
 Let's apply kmeans clustering:
 
 ```python
+from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
 k = 4  # number of clusters
@@ -307,7 +308,10 @@ km = KMeans(
     n_init=20
 )
 
-labels = km.fit_predict(subject_embeddings)
+# Scaling
+X = StandardScaler().fit_transform(subject_embeddings)
+
+labels = km.fit_predict(X)
 ```
 
 Let us check the clustering performance:
