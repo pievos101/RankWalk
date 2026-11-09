@@ -1,0 +1,1 @@
+{"scenario": "S2_regular", "replicate": 2, "method": "TS2Vec_repo", "status": "excluded: repository input includes latent regime; not an observed-data comparator"}

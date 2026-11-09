@@ -1,0 +1,15 @@
+{
+  "scenario": "S2_regular",
+  "replicate": 27,
+  "method": "RankWalk",
+  "seed": 10027,
+  "ARI": 0.9008008322586938,
+  "seconds": 26.474574459996802,
+  "graph_seconds": 0.5894368879999092,
+  "training_seconds": 25.257416263997584,
+  "subjects": 200,
+  "nodes": 2000,
+  "readout": "repository-flatten",
+  "backend": "numba",
+  "epochs": 100
+}

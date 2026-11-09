@@ -1,0 +1,1 @@
+a<-commandArgs(TRUE);d<-read.csv(a[1],check.names=FALSE);set.seed(as.integer(a[3]));x<-as.matrix(d);if(a[4]=='scale') x<-scale(x);x[!is.finite(x)]<-0;write.csv(data.frame(cluster=kmeans(x,as.integer(a[5]),nstart=as.integer(a[6]))$cluster),a[2],row.names=FALSE)

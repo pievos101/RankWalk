@@ -1,0 +1,31 @@
+{
+  "cohort": "RENAL",
+  "method": "TimesURL",
+  "replicate": 6,
+  "seed": 30006,
+  "subjects": 407,
+  "seconds": 90.72795048899934,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.754324233753512,
+      "logrank_chisq": 173.4267417984,
+      "observed_clusters": 3,
+      "min_cluster": 78
+    },
+    {
+      "k": 4,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.786997654215967,
+      "logrank_chisq": 245.627038515337,
+      "observed_clusters": 4,
+      "min_cluster": 71
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "scenario": "S2_regular",
+  "replicate": 32,
+  "seed": 10032,
+  "method": "VaDER",
+  "ARI": 0.6423281367512651,
+  "seconds": 20.393202528000984,
+  "pretrain_epochs": 50,
+  "train_epochs": 100,
+  "implementation": "official TensorFlow VaDER",
+  "readout": "native mixture",
+  "normalization": "repository R scale, across subjects separately per time and marker"
+}

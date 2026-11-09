@@ -1,0 +1,2 @@
+"scenario","replicate","method","seed","ARI","seconds"
+"S1_noisy",12,"DTW",10012,0.415955636809754,23.893

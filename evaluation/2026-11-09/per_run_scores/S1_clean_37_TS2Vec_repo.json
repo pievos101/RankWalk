@@ -1,0 +1,16 @@
+{
+  "scenario": "S1_clean",
+  "replicate": 37,
+  "seed": 10037,
+  "method": "TS2Vec_repo",
+  "ARI": 0.9468454366949792,
+  "seconds": 69.88636813300036,
+  "epochs": 50,
+  "input_shape": [
+    200,
+    50,
+    2
+  ],
+  "implementation": "official TS2Vec",
+  "output_dims": 64
+}

@@ -1,0 +1,22 @@
+{
+  "cohort": "RENAL",
+  "method": "VaDER_native",
+  "replicate": 3,
+  "seed": 30003,
+  "subjects": 407,
+  "seconds": 74.31537064900112,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "native Gaussian mixture labels, no KMeans",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.796819013739592,
+      "logrank_chisq": 261.224051456906,
+      "observed_clusters": 3,
+      "min_cluster": 5
+    }
+  ]
+}

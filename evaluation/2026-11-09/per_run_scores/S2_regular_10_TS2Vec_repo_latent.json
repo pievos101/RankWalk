@@ -1,0 +1,14 @@
+{
+  "scenario": "S2_regular_repo_latent_DIAGNOSTIC",
+  "replicate": 10,
+  "method": "TS2Vec_repo",
+  "seed": 10010,
+  "ARI": 0.8062913741139793,
+  "seconds": 69.6325862770027,
+  "input_shape": [
+    200,
+    50,
+    3
+  ],
+  "status": "Leaked latent regime input; source reproduction diagnostic, NOT a valid observed-only competitor"
+}

@@ -1,0 +1,2 @@
+"scenario","replicate","method","seed","ARI","seconds"
+"S2_regular",42,"DTW",10042,0.727539819566971,20.5829999999996

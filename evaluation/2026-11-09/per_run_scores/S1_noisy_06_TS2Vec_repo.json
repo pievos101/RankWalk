@@ -1,0 +1,16 @@
+{
+  "scenario": "S1_noisy",
+  "replicate": 6,
+  "seed": 10006,
+  "method": "TS2Vec_repo",
+  "ARI": 0.9476353889659871,
+  "seconds": 107.2103377300009,
+  "epochs": 50,
+  "input_shape": [
+    200,
+    50,
+    2
+  ],
+  "implementation": "official TS2Vec",
+  "output_dims": 64
+}

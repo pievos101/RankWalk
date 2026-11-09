@@ -1,0 +1,30 @@
+{
+  "cohort": "AIDS",
+  "method": "ValueSummary",
+  "replicate": 5,
+  "seed": 30005,
+  "subjects": 467,
+  "seconds": 4.2952417570013495,
+  "scope": "descriptive follow-up association control; not held-out prediction",
+  "readout": "standardized features, KMeans100",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 467,
+      "events": 188,
+      "C_index": 0.641491263213042,
+      "logrank_chisq": 52.7125585057306,
+      "observed_clusters": 3,
+      "min_cluster": 86
+    },
+    {
+      "k": 4,
+      "n": 467,
+      "events": 188,
+      "C_index": 0.642585287682209,
+      "logrank_chisq": 52.8092871615796,
+      "observed_clusters": 4,
+      "min_cluster": 7
+    }
+  ]
+}

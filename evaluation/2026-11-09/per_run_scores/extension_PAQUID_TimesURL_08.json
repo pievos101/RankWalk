@@ -1,0 +1,31 @@
+{
+  "cohort": "PAQUID",
+  "method": "TimesURL",
+  "replicate": 8,
+  "seed": 30008,
+  "subjects": 288,
+  "seconds": 71.12524775600104,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 288,
+      "events": 103,
+      "C_index": 0.757349537037037,
+      "logrank_chisq": 174.640199477185,
+      "observed_clusters": 3,
+      "min_cluster": 30
+    },
+    {
+      "k": 4,
+      "n": 288,
+      "events": 103,
+      "C_index": 0.78041087962963,
+      "logrank_chisq": 159.263188827825,
+      "observed_clusters": 4,
+      "min_cluster": 26
+    }
+  ]
+}

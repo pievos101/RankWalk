@@ -1,0 +1,15 @@
+Package: TAPIO
+Type: Package
+Title: Hierarchical Clustering with an Ensemble of Principle Component Trees for Interpretable Patient Stratification. 
+Version: 1.2
+Date: 2025-08-18
+Author: Bastian Pfeifer and Markus Loecher
+Maintainer: Bastian Pfeifer <bastianxpfeifer@gmail.com>
+Depends: R (>= 3.5.0)
+Imports: cluster, NbClust, fastcluster, FactoMineR, MASS
+Description: Hierarchical Clustering with an Ensemble of Principle Component Trees for Interpretable Patient Stratification.
+License: GPL (>= 3)
+LazyLoad: yes
+Encoding: UTF-8
+Suggests: ModelMetrics
+RoxygenNote: 7.3.2

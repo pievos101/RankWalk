@@ -1,0 +1,2 @@
+"scenario","replicate","method","seed","ARI","seconds"
+"S1_noisy",8,"TAPIO_weighted",10008,0.95980216322758,10.002

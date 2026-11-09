@@ -1,0 +1,31 @@
+{
+  "cohort": "RENAL",
+  "method": "TS2Vec",
+  "replicate": 5,
+  "seed": 30005,
+  "subjects": 407,
+  "seconds": 106.39253771099902,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.663483102621607,
+      "logrank_chisq": 53.0302813749703,
+      "observed_clusters": 3,
+      "min_cluster": 95
+    },
+    {
+      "k": 4,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.761271363390302,
+      "logrank_chisq": 179.269418706149,
+      "observed_clusters": 4,
+      "min_cluster": 97
+    }
+  ]
+}

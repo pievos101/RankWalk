@@ -1,0 +1,31 @@
+{
+  "cohort": "PROTHRO",
+  "method": "RankWalk",
+  "replicate": 2,
+  "seed": 30002,
+  "subjects": 488,
+  "seconds": 41.33891189800124,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 488,
+      "events": 292,
+      "C_index": 0.708335959063812,
+      "logrank_chisq": 296.550304238447,
+      "observed_clusters": 3,
+      "min_cluster": 77
+    },
+    {
+      "k": 4,
+      "n": 488,
+      "events": 292,
+      "C_index": 0.75339349407005,
+      "logrank_chisq": 349.379039000123,
+      "observed_clusters": 4,
+      "min_cluster": 67
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "queue_finished": true,
+  "failures": [
+    {
+      "run": "S2_regular_09_VaDER",
+      "method": "VaDER",
+      "reason": "Singular covariance during native mixture assignment",
+      "log": "logs/S2_regular_09_VaDER.log"
+    },
+    {
+      "run": "extension_RENAL_VaDER_08",
+      "method": "VaDER",
+      "reason": "Gaussian mixture initialization failed: ill-defined covariance",
+      "log": "logs/extension_RENAL_VaDER_08.log"
+    },
+    {
+      "run": "extension_HEART_VaDER_07",
+      "method": "VaDER",
+      "reason": "Singular covariance during native mixture assignment",
+      "log": "logs/extension_HEART_VaDER_07.log"
+    }
+  ],
+  "policy": "Keep original seeds and method configuration; report successful fits and failure counts separately. Failed runs are not assigned fabricated scores."
+}

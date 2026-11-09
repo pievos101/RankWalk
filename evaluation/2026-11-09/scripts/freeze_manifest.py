@@ -1,0 +1,14 @@
+import hashlib,json,subprocess,platform
+from pathlib import Path
+R=Path('/workspace/rankwalk-paper-reproduction')
+def git(path):return subprocess.check_output(['git','-C',str(path),'rev-parse','HEAD'],text=True).strip()
+manifest=dict(task='Fresh paper reproduction and longitudinal extensions; do not push',primary='repository settings; paper-spec sensitivities separate',rankwalk_commit=git('/workspace/RankWalk'),sources={name:git(path) for name,path in [('TAPIO',R/'TAPIO'),('VaDER',Path('/workspace/rankwalk-research/VaDER')),('TS2Vec',Path('/workspace/rankwalk-research/ts2vec')),('TimesURL',Path('/workspace/rankwalk-research/TimesURL')),('JM',Path('/workspace/rankwalk-research/data_sources/JM')),('joineR',Path('/workspace/rankwalk-research/data_sources/joineR')),('joineRML',R/'data_sources/joineRML')]},paper_sha256=hashlib.sha256((R/'paper.pdf').read_bytes()).hexdigest(),simulation=dict(subjects=200,clusters=4,outcomes=5,repetitions=50,seeds=list(range(10001,10051)),scenarios=['S1_clean','S1_noisy','S2_regular','S1_irregular','S2_irregular','S1_subject_curve']),clinical=dict(primary_repetitions={'PBC2':20,'AIDS':20,'HEART':20,'PAQUID':30},source_k={'PBC2':3,'AIDS':3,'HEART':2,'PAQUID':3},actual_gnn_epochs={'PBC2':100,'AIDS':200,'HEART':100,'PAQUID':100},extension_repetitions=10,extension_cohorts=['PBC2','AIDS','HEART','PAQUID','PROTHRO','RENAL'],extension_methods=['fPCA','RankWalk','TS2Vec','TimesURL','VaDER','TimeOnly','ValueSummary'],extension_seed_range=[30001,30010]),runtime='Concurrent wall times are observational, not isolated comparative speed evidence',environment=platform.platform())
+manifest['source_patches']={}
+for name,path in [('TimesURL','/workspace/rankwalk-research/TimesURL'),('VaDER','/workspace/rankwalk-research/VaDER'),('TS2Vec','/workspace/rankwalk-research/ts2vec')]:
+ diff=subprocess.check_output(['git','-C',path,'diff'],text=True)
+ if diff:
+  patch=R/(name+'_working_tree.patch');patch.write_text(diff);manifest['source_patches'][name]=dict(file=patch.name,sha256=hashlib.sha256(diff.encode()).hexdigest())
+manifest['scripts_sha256']={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (R/'scripts').iterdir() if p.is_file()}
+(R/'manifest.json').write_text(json.dumps(manifest,indent=2))
+for name,cmd in [('python-freeze.txt',['/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/uv','pip','freeze','--python','/workspace/.rankwalk-venv/bin/python']),('vader-freeze.txt',['/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/uv','pip','freeze','--python','/workspace/rankwalk-research/vader-venv/bin/python']),('R-session.txt',[str(R/'r-env/bin/Rscript'),'-e','sessionInfo(); print(installed.packages()[,c("Package","Version")])'])]:
+ p=subprocess.run(cmd,text=True,capture_output=True);(R/name).write_text(p.stdout+p.stderr)

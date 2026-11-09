@@ -1,0 +1,22 @@
+{
+  "cohort": "PROTHRO",
+  "method": "VaDER_native",
+  "replicate": 1,
+  "seed": 30001,
+  "subjects": 488,
+  "seconds": 89.38735630299925,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "native Gaussian mixture assignments",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 488,
+      "events": 292,
+      "C_index": 0.560471623205576,
+      "logrank_chisq": 29.4677511486998,
+      "observed_clusters": 3,
+      "min_cluster": 17
+    }
+  ]
+}

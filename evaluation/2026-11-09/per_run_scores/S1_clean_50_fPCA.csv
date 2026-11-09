@@ -1,0 +1,2 @@
+"scenario","replicate","method","seed","ARI","seconds"
+"S1_clean",50,"fPCA",10050,0.922035203325801,0.079000000000633
