@@ -1,0 +1,22 @@
+{
+  "cohort": "PAQUID",
+  "method": "VaDER_native",
+  "replicate": 1,
+  "seed": 30001,
+  "subjects": 288,
+  "seconds": 33.80766925900389,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "native Gaussian mixture labels, no KMeans",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 288,
+      "events": 103,
+      "C_index": 0.706597222222222,
+      "logrank_chisq": 113.174408390368,
+      "observed_clusters": 3,
+      "min_cluster": 34
+    }
+  ]
+}

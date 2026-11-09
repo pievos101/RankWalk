@@ -1,0 +1,30 @@
+{
+  "cohort": "HEART",
+  "method": "ValueSummary",
+  "replicate": 10,
+  "seed": 30010,
+  "subjects": 256,
+  "seconds": 3.046974290002254,
+  "scope": "descriptive follow-up association control; not held-out prediction",
+  "readout": "standardized features, KMeans100",
+  "metrics": [
+    {
+      "k": 2,
+      "n": 256,
+      "events": 54,
+      "C_index": 0.424292648277495,
+      "logrank_chisq": 6.86198378357424,
+      "observed_clusters": 2,
+      "min_cluster": 102
+    },
+    {
+      "k": 4,
+      "n": 256,
+      "events": 54,
+      "C_index": 0.490765952409139,
+      "logrank_chisq": 33.7158703449154,
+      "observed_clusters": 4,
+      "min_cluster": 3
+    }
+  ]
+}

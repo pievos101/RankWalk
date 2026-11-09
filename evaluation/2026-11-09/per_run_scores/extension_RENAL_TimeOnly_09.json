@@ -1,0 +1,30 @@
+{
+  "cohort": "RENAL",
+  "method": "TimeOnly",
+  "replicate": 9,
+  "seed": 30009,
+  "subjects": 407,
+  "seconds": 6.2735260910012585,
+  "scope": "descriptive follow-up association control; not held-out prediction",
+  "readout": "standardized features, KMeans100",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.887054365478308,
+      "logrank_chisq": 710.821129350611,
+      "observed_clusters": 3,
+      "min_cluster": 79
+    },
+    {
+      "k": 4,
+      "n": 407,
+      "events": 126,
+      "C_index": 0.909970871033434,
+      "logrank_chisq": 729.106640531015,
+      "observed_clusters": 4,
+      "min_cluster": 65
+    }
+  ]
+}

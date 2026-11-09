@@ -1,0 +1,31 @@
+{
+  "cohort": "HEART",
+  "method": "RankWalk",
+  "replicate": 1,
+  "seed": 30001,
+  "subjects": 256,
+  "seconds": 15.638108056002238,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 2,
+      "n": 256,
+      "events": 54,
+      "C_index": 0.603468687107849,
+      "logrank_chisq": 7.03702328301106,
+      "observed_clusters": 2,
+      "min_cluster": 105
+    },
+    {
+      "k": 4,
+      "n": 256,
+      "events": 54,
+      "C_index": 0.720966023440275,
+      "logrank_chisq": 36.5191917793715,
+      "observed_clusters": 4,
+      "min_cluster": 40
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "scenario": "S1_irregular",
+  "replicate": 7,
+  "method": "RankWalk",
+  "seed": 10007,
+  "ARI": 0.947489261454675,
+  "seconds": 88.81151991799925,
+  "graph_seconds": 0.5474103179985832,
+  "training_seconds": 87.16044882699862,
+  "subjects": 200,
+  "nodes": 1534,
+  "readout": "interpolate10-global-grid-flatten",
+  "backend": "numba",
+  "epochs": 100
+}

@@ -1,0 +1,30 @@
+{
+  "cohort": "PROTHRO",
+  "method": "ValueSummary",
+  "replicate": 5,
+  "seed": 30005,
+  "subjects": 488,
+  "seconds": 2.6864461149998533,
+  "scope": "descriptive follow-up association control; not held-out prediction",
+  "readout": "standardized features, KMeans100",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 488,
+      "events": 292,
+      "C_index": 0.637390822126716,
+      "logrank_chisq": 96.3455329524053,
+      "observed_clusters": 3,
+      "min_cluster": 10
+    },
+    {
+      "k": 4,
+      "n": 488,
+      "events": 292,
+      "C_index": 0.642583466720442,
+      "logrank_chisq": 178.696025423558,
+      "observed_clusters": 4,
+      "min_cluster": 1
+    }
+  ]
+}

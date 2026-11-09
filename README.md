@@ -1,442 +1,126 @@
-# RankWalk
-<p align="center">
-<img src="https://github.com/pievos101/RankWalk/blob/main/RankWalk_Logo.png" width="600">
-</p>
-
-**RankWalk** is a Python library for **node representation learning** using start-node anchored random walks on graphs, combined with contrastive learning via a lightweight GNN. 
-
----
-
-## Features
-
-- Compute **start-node anchored Jaccard similarity** for graph nodes.
-- Train a **StartAnchor GNN** using **contrastive InfoNCE loss** on positive pairs derived from biased random walks.
-
----
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/pievos101/RankWalk.git
-cd RankWalk
-
-# Optional: create and activate a virtual environment
-python3 -m venv rankwalk-venv
-source rankwalk-venv/bin/activate  # Linux/macOS
-# .\rankwalk-venv\Scripts\activate  # Windows
-
-# Install the package 
-pip install -e .
-```
-
-## Example Usage on Graphs
-
-```python
-import torch
-from torch_geometric.utils import from_networkx, to_undirected
-from sklearn.cluster import KMeans
-from rankwalk import generate_sbm_graph, compute_jaccard_fast, train_gnn
-from node2vec import Node2Vec
-
-# --------------------------
-# Graph parameters
-# --------------------------
-n_communities = 4
-size_per_comm = 25
-p_in = 0.4
-p_out = 0.15
-seed = 42
-
-# Generate SBM graph
-G, labels = generate_sbm_graph(
-    n_communities=n_communities,
-    size_per_comm=size_per_comm,
-    p_in=p_in,
-    p_out=p_out,
-    seed=seed
-)
-
-data = from_networkx(G)
-edge_index = to_undirected(data.edge_index)
-
-# --------------------------
-# Node features
-# --------------------------
-x = torch.randn(G.number_of_nodes(), 20)  # random features
-J = compute_jaccard_fast(edge_index, G.number_of_nodes())
-
-# --------------------------
-# Train StartAnchor GNN
-# --------------------------
-walk_length = 20
-top_k = 10
-epochs = 300
-lr = 1e-3
-
-emb_gnn = train_gnn(
-    x=x, 
-    edge_index=edge_index,
-    edge_type=None,
-    J=J,
-    epochs=epochs,
-    lr=lr,
-    walk_length=walk_length,
-    top_k=top_k
-)
-
-print("RankWalk embedding shape:", emb_gnn.shape)
-
-# --------------------------
-# Node2Vec baseline
-# --------------------------
-def run_node2vec(G, dim=48):
-    node2vec = Node2Vec(
-        G,
-        dimensions=dim,
-        walk_length=20,
-        num_walks=100,
-        p=1,
-        q=1,
-        workers=1#,
-        #seed=42
-    )
-    model = node2vec.fit(window=10, min_count=1, batch_words=128)
-
-    emb = torch.zeros(G.number_of_nodes(), dim)
-    for i in range(G.number_of_nodes()):
-        emb[i] = torch.tensor(model.wv[str(i)])
-    return emb
-
-emb_n2v = run_node2vec(G)
-print("Node2Vec embedding shape:", emb_n2v.shape)
-
-# --------------------------
-# Evaluate embeddings
-# --------------------------
-def evaluate(emb, labels):
-    from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
-    emb_np = emb.detach().cpu().numpy() if isinstance(emb, torch.Tensor) else emb
-    labels_np = labels.cpu().numpy() if isinstance(labels, torch.Tensor) else labels
-    k = len(set(labels_np))
-    km = KMeans(n_clusters=k, n_init=10).fit(emb_np)
-    ari = adjusted_rand_score(labels_np, km.labels_)
-    nmi = normalized_mutual_info_score(labels_np, km.labels_)
-    return ari, nmi
-
-ari_gnn, nmi_gnn = evaluate(emb_gnn, labels)
-ari_n2v, nmi_n2v = evaluate(emb_n2v, labels)
+# RankWalk — completed evaluation results
 
-print(f"RankWalk | ARI: {ari_gnn:.3f}, NMI: {nmi_gnn:.3f}")
-print(f"Node2Vec | ARI: {ari_n2v:.3f}, NMI: {nmi_n2v:.3f}")
-```
+This `results` branch contains the 9 November 2026 paper reproduction and expanded longitudinal benchmark. It starts from RankWalk commit `58a87af4fdcdd243425106622e0e4f46dcc1ba6a`; library implementation files are unchanged. The `main` branch is unchanged by this results publication. For installation, API details and the fast backend, see [README_IMPLEMENTATION.md](README_IMPLEMENTATION.md).
 
-## Example Usage: Longitudinal Multivariate Tabular Data
-
-Let us simulate some longitudinal data using the R-package [TAPIO](https://github.com/pievos101/TAPIO):
+## Downloads and report
 
-### Simulated Longitudinal Data
+- [Compiled PDF report](evaluation/2026-11-09/RankWalk_Evaluation_Report.pdf)
+- [Download the full LaTeX package, including every plot and data table](https://github.com/pievos101/RankWalk/raw/refs/heads/results/evaluation/2026-11-09/RankWalk_LaTeX_Report.zip)
+- [Browse LaTeX source](evaluation/2026-11-09/report/report.tex), [plots](evaluation/2026-11-09/report/figures), and [consolidated CSV tables](evaluation/2026-11-09/report/data)
+- [Actual simulation and evaluation scripts](evaluation/2026-11-09/scripts)
+- [Per-run scalar results](evaluation/2026-11-09/per_run_scores)
+- [Generated benchmark inputs](evaluation/2026-11-09/benchmark_inputs.zip) and [reproduction instructions](evaluation/2026-11-09/README.md)
 
-```R
-library(TAPIO)
+The LaTeX ZIP compiles independently with `make`; the PDF is 20 pages. The benchmark input archive contains all 300 generated simulation CSVs, 150 preprocessed VaDER input files and 12 derived public clinical tables. Environment installations, model weights and large intermediate embedding files are excluded.
 
-df <- TAPIO::simLongData(
-    ranTimes = FALSE,
-    n_i = 10,
-    eta = 3,
-    sigma_diag = c(5,5,5,5,5)
-  )
+## Main findings
 
-write.table(df, file="df.txt")
-```
-
-The above code generates data consisting of five longitudinal variables.
-
-### Converting Tabular Data to Temporal Graph
-```python
-import numpy as np
-import pandas as pd
-from rankwalk import build_temporal_graph
+- **Clean Simulation 1:** RankWalk has the highest mean ARI among the tested methods, with a small advantage over FPCA (+0.011 ARI; exploratory paired bootstrap 95% interval +0.003 to +0.019).
+- **Corrupted-marker setting:** RankWalk and weighted TAPIO are effectively tied. RankWalk is much more robust than FPCA in this setting.
+- **Regime-switching Simulation 2:** observed-marker TS2Vec outperforms RankWalk (0.961 versus 0.911 ARI). RankWalk exceeds the other tested methods.
+- **PBC2:** RankWalk leads the expanded comparison, including the observation-process and simple-summary controls.
+- **PROTHRO and RENAL:** RankWalk leads the tested biomarker representations, but visit-time/count controls score higher. Full-follow-up concordance therefore cannot establish prospective prediction or biomarker-specific benefit.
+- **PAQUID:** corrected-endpoint results favor simple marker summaries and TimesURL over the common mean-pooling RankWalk configuration.
+- **Configuration matters:** the paper-specific HEART configuration reproduces C-index 0.706, while the common extension configuration gives about 0.581. Moving Simulation 1 to a subject-shared random curve also changes its difficulty substantially.
 
-df = pd.read_table("df.txt", sep=r"\s+")
-print(df.head(20))
+These results support competitive, setting-dependent performance; they do not demonstrate universal superiority or an exhaustive 2026 state-of-the-art frontier.
 
-G, labels_df = build_temporal_graph(df, k_similarity=5)
-```
+## Primary simulation comparison
 
-#### The Case of Irregular Time Measures
+Mean **ARI ± sample SD**. Each cell uses 50 generated datasets, except VaDER Simulation 2: 49 successes and one numerical failure. Known labels are used for evaluation only.
 
-```R
-library(TAPIO)
+| Method | S1 clean | S1 corrupted marker | S2 regime switching |
+|---|---|---|---|
+| RankWalk | 0.924 ± 0.039 | 0.936 ± 0.100 | 0.911 ± 0.080 |
+| FPCA | 0.913 ± 0.038 | 0.644 ± 0.294 | 0.654 ± 0.021 |
+| DTW | 0.888 ± 0.047 | 0.681 ± 0.246 | 0.839 ± 0.068 |
+| kml3d | 0.888 ± 0.043 | 0.869 ± 0.136 | 0.659 ± 0.021 |
+| TAPIO PC1 | 0.666 ± 0.094 | 0.820 ± 0.169 | 0.676 ± 0.032 |
+| TAPIO weighted | 0.811 ± 0.082 | 0.938 ± 0.092 | 0.681 ± 0.033 |
+| TS2Vec (observed markers) | 0.573 ± 0.177 | 0.642 ± 0.227 | 0.961 ± 0.053 |
+| TS2Vec (source serialization) | 0.770 ± 0.077 | 0.684 ± 0.213 | Excluded: latent-state source input |
+| VaDER (posterior + k-means) | 0.520 ± 0.156 | 0.563 ± 0.215 | 0.660 ± 0.035 |
 
-df <- TAPIO::simLongData(
-    ranTimes = TRUE, # irregular time
-    n_i = 10,
-    eta = 3,
-    sigma_diag = c(5,5,5,5,5)
-  )
 
-write.table(df, file="df.txt")
-```
-In case of irregular time we apply a sliding window approach:
+TS2Vec source serialization is a separate sensitivity, not another independent architecture. Simulation 2 source-input leakage diagnostics are excluded from this valid observed-marker comparison. Clean and noisy Simulation 1 use different base-noise settings, so a higher noisy-setting score does not imply that adding noise improves clustering.
 
-```python
-import numpy as np
-import pandas as pd
-from rankwalk import build_temporal_graph_grid
+## All 300 RankWalk fits
 
-df = pd.read_table("df.txt", sep=r"\s+")
-print(df.head(20))
+| Setting | Fits | ARI ± SD |
+|---|---|---|
+| S1 regular, clean | 50 | 0.924 ± 0.039 |
+| S1 corrupted marker | 50 | 0.936 ± 0.100 |
+| S1 irregular | 50 | 0.905 ± 0.043 |
+| S2 regular | 50 | 0.911 ± 0.080 |
+| S2 irregular | 50 | 0.921 ± 0.090 |
+| S1 subject-shared curve sensitivity | 50 | 0.782 ± 0.081 |
 
-G, labels_df = build_temporal_graph_grid(
-        df,
-        k_similarity=5,
-        n_bins=5,
-        overlap=0.5  
-    )
-```
 
-### After Graph Construction we Enrich Nodes with Longitudinal Values
+The subject-shared curve setting follows the paper description rather than the repository per-visit redraw. FPCA in this sensitivity gives 0.756 ± 0.070. Irregular inputs use a documented common-grid interpolation correction; graph and readout settings also differ, so their effect is not solely sampling irregularity.
 
-```python
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+## Completed original clinical reproduction
 
-node_list = list(G.nodes())
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+Repository-specific settings and readouts are preserved. Mean **C-index ± SD** and **log-rank χ² ± SD** across fits on the same patients.
 
-x_list, t_list = [], []
+| Cohort | Method | Fits | C-index | Log-rank χ² |
+|---|---|---|---|---|
+| PBC2 | RankWalk | 20 | 0.788 ± 0.018 | 240.788 ± 26.954 |
+| PBC2 | FPCA | 20 | 0.760 ± 0.000 | 127.498 ± 0.000 |
+| AIDS | RankWalk | 20 | 0.689 ± 0.006 | 104.113 ± 9.392 |
+| AIDS | FPCA | 20 | 0.642 ± 0.000 | 53.091 ± 0.000 |
+| HEART | RankWalk | 20 | 0.706 ± 0.022 | 54.161 ± 8.408 |
+| HEART | FPCA | 20 | 0.569 ± 0.000 | 4.806 ± 0.000 |
+| PAQUID | RankWalk | 30 | 0.706 ± 0.015 | 40.197 ± 5.054 |
+| PAQUID | FPCA | 30 | 0.659 ± 0.000 | 34.286 ± 0.000 |
 
-for n in node_list:
-    x_list.append(G.nodes[n]['features'])
-    t_list.append(G.nodes[n]['time'])
 
-x = torch.tensor(np.array(x_list), dtype=torch.float32, device=device)
+PBC2/AIDS/HEART FPCA values match the paper after rounding. PAQUID source concordance also rounds similarly, but its FPCA χ² is 34.29 rather than the paper’s 5.06; this discrepancy is not resolved. **The native PAQUID endpoint assigns dementia events time zero and is preserved only as a source reproduction.**
 
-edges, et = [], []
+## Expanded real-world comparison
 
-for u, v, a in G.edges(data=True):
-    edges.append([u, v])
-    et.append(a['edge_type'])
-    edges.append([v, u])
-    et.append(a['edge_type'])
+Mean **C-index ± sample SD**, source K=3 except HEART K=2. All successful fits are summarized: 10 per method/cohort, except VaDER on RENAL and HEART (9). These columns are descriptive successful-fit means, not matched-subset significance tests. PAQUID uses the corrected `agedem` endpoint and the common mean-pooling configuration.
 
-edge_index = torch.tensor(edges, dtype=torch.long, device=device).t().contiguous()
-edge_type = torch.tensor(et, dtype=torch.long, device=device)
-```
+| Method | PBC2 | PAQUID | PROTHRO |
+|---|---|---|---|
+| RankWalk | 0.788 ± 0.027 | 0.682 ± 0.040 | 0.707 ± 0.010 |
+| FPCA | 0.760 ± 0.000 | 0.676 ± 0.000 | 0.636 ± 0.000 |
+| TS2Vec | 0.656 ± 0.057 | 0.613 ± 0.032 | 0.668 ± 0.034 |
+| TimesURL | 0.716 ± 0.014 | 0.746 ± 0.022 | 0.679 ± 0.011 |
+| VaDER (native mixture) | 0.681 ± 0.055 | 0.638 ± 0.089 | 0.632 ± 0.048 |
+| VaDER (posterior + k-means) | 0.711 ± 0.014 | 0.706 ± 0.046 | 0.657 ± 0.024 |
+| Simple marker summaries | 0.729 ± 0.001 | 0.763 ± 0.000 | 0.637 ± 0.000 |
+| Visit-time/count control | 0.745 ± 0.000 | 0.682 ± 0.000 | 0.804 ± 0.000 |
 
-### Run RankWalk on Temporal Graph
 
-```python
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+| Method | RENAL | AIDS | HEART |
+|---|---|---|---|
+| RankWalk | 0.841 ± 0.011 | 0.689 ± 0.009 | 0.581 ± 0.054 |
+| FPCA | 0.624 ± 0.000 | 0.642 ± 0.000 | 0.569 ± 0.000 |
+| TS2Vec | 0.713 ± 0.046 | 0.526 ± 0.037 | 0.516 ± 0.063 |
+| TimesURL | 0.741 ± 0.017 | 0.636 ± 0.005 | 0.521 ± 0.065 |
+| VaDER (native mixture) | 0.719 ± 0.055 (n=9) | 0.617 ± 0.018 | 0.533 ± 0.030 (n=9) |
+| VaDER (posterior + k-means) | 0.758 ± 0.039 (n=9) | 0.619 ± 0.018 | 0.535 ± 0.060 (n=9) |
+| Simple marker summaries | 0.781 ± 0.000 | 0.641 ± 0.000 | 0.424 ± 0.000 |
+| Visit-time/count control | 0.887 ± 0.000 | 0.835 ± 0.000 | 0.705 ± 0.000 |
 
-from rankwalk import train_gnn, compute_jaccard_fast
 
-J = compute_jaccard_fast(edge_index, G.number_of_nodes(), device=device)
+VaDER native mixture and posterior-plus-k-means are **two readouts of the same fitted models**, not independent fits. A displayed zero SD means stable partitions on the same cohort; it is not zero patient-sampling uncertainty.
 
-epochs=100
-lr=1e-3
-top_k=10
-walk_length=20
+## Interpretation, deviations and failure audit
 
-emb = train_gnn(
-    x, edge_index, edge_type, J,
-    epochs=epochs,
-    lr=lr,
-    walk_length=walk_length,
-    top_k=top_k,
-    device=device
-)
+1. Clinical trajectories include full observed follow-up; clusters are ordered using observed outcomes (or evaluated with a fitted categorical Cox model in native PAQUID). **These are descriptive associations, not held-out or prospective predictive accuracy.** Time-only controls are especially strong on PROTHRO, RENAL, AIDS and HEART. A separate fixed-landmark, held-out design is needed for prognostic claims.
+2. Simulation 1 repository code redraws quadratic random effects per visit; the paper describes a subject-shared curve. Both are analyzed separately.
+3. Simulation 2 source preprocessing includes the unobserved simulator regime in competitor inputs. The main comparison removes it; source-input diagnostics are separately labeled in the report and CSVs.
+4. Source clinical cluster counts are 3 (PBC2/AIDS/PAQUID) or 2 (HEART), whereas the paper text describes 4. K=4 sensitivity results are included.
+5. Source PAQUID treats an eventual subject status as visit-specific dementia status, assigning event time zero. The common extension corrects the endpoint using `agedem`; it also changes the readout from padded flattening to mean pooling. These are distinct analyses.
+6. Native clinical graph subspace randomness was not pre-seeded in NumPy; R clustering, Torch and the walk sampler were seeded. Saved outputs permit exact score replay; graph refits retain the documented reproducibility limitation.
+7. Concurrent wall times on four shared CPU cores and unequal training budgets are not isolated comparative speed evidence. The fast backend was active; no new controlled old-versus-fast speedup factor is claimed.
+8. Three VaDER fits failed despite same-seed retries: S2 regular replicate 9 (singular covariance), RENAL extension replicate 8 (mixture initialization covariance), HEART extension replicate 7 (singular covariance). Failed fits have no invented score or replacement seed. The compute queue finished, but the historical strict all-successful flag remains false. See the [failure audit](evaluation/2026-11-09/report/provenance/failed_runs.json).
 
-embeddings = emb.detach().cpu().numpy()
-subjects =  np.array([G.nodes[n]['subject'] for n in node_list])
-print("RankWalk embedding shape:", embeddings.shape)
+Historical provenance records mention the original no-push instruction and original cloud paths; they were captured before the user subsequently authorized publishing this **results branch only**.
 
-```
+## Reproduction and files
 
-Note, subject-wise mean pooling is suggested before clustering. 
+See [evaluation/2026-11-09/README.md](evaluation/2026-11-09/README.md) for the layout, dependency versions, script relocation and execution order. The generated inputs and scalar per-run results are committed so the numeric summaries can be inspected without rerunning several hours of training. The LaTeX report can be rebuilt without installing any machine-learning environments.
 
-```python
-unique_subjects = np.unique(subjects)
-
-subject_embeddings = np.vstack([
-    embeddings[subjects == s].mean(axis=0)
-    for s in unique_subjects
-])
-
-print(subject_embeddings.shape)
-```
-or Flattening + Interpolation:
-
-```python
-from scipy.interpolate import interp1d
-
-T_new = 8
-
-subject_embeddings  = []
-
-for s in np.sort(np.unique(subjects)):
-    E = embeddings[subjects == s]
-
-    old_t = np.linspace(0,1,len(E))
-    new_t = np.linspace(0,1,T_new)
-
-    E_new = interp1d(
-        old_t,
-        E,
-        axis=0
-    )(new_t)
-
-    subject_embeddings.append(E_new.flatten())
-
-subject_embeddings  = np.vstack(subject_embeddings)
-```
-
-Let's apply kmeans clustering:
-
-```python
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-
-k = 4  # number of clusters
-
-km = KMeans(
-    n_clusters=k,
-    n_init=20
-)
-
-# Scaling
-X = StandardScaler().fit_transform(subject_embeddings)
-
-labels = km.fit_predict(X)
-```
-
-Let us check the clustering performance:
-
-```python
-from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
-
-# One true label per subject
-true_labels = (
-    df.groupby("subject")["cluster"]
-      .first()
-      .to_numpy()
-)
-
-ari = adjusted_rand_score(true_labels, labels)
-nmi = normalized_mutual_info_score(true_labels, labels)
-
-print(f"ARI = {ari:.3f}")
-print(f"NMI = {nmi:.3f}")
-
-```
-
-## Citation
-
-If you find {RankWalk} useful please cite [the paper](https://arxiv.org/abs/2607.25609):
-
-```
-@article{pfeifer2026contrastive,
-  title={Contrastive Representation Learning of Longitudinal Disease Trajectories on Temporal Graphs},
-  author={Pfeifer, Bastian},
-  journal={arXiv preprint arXiv:2607.25609},
-  year={2026}
-}
-
-```
-
-## Optional CPU acceleration
-
-The existing `train_gnn(x, edge_index, edge_type, J, ...)` call still uses the
-Torch backend and returns a detached Torch tensor on the requested device.
-The walk sampler now tracks integer node IDs correctly, so repeated visits no
-longer create duplicate positive pairs. This correctness fix changes training
-pairs relative to earlier versions.
-
-For compiled CPU sampling and sparse Jaccard storage, install the optional extra:
-
-```bash
-pip install -e '.[fast]'
-```
-
-```python
-from rankwalk import compute_jaccard_sparse, train_gnn
-
-# SciPy CSR matrix on the CPU; avoids materializing a dense N-by-N tensor.
-J_sparse = compute_jaccard_sparse(edge_index, x.size(0))
-emb = train_gnn(
-    x, edge_index, None, J_sparse,
-    epochs=80,
-    backend='numba',
-    device='cpu',
-    seed=42,
-)
-```
-
-The fast backend also accepts dense Torch similarities. It follows the supplied
-edge directions and preserves the sampling mass of duplicate edges. As before,
-Jaccard itself describes undirected neighbor sets. Compilation adds overhead to
-the first fast call; performance depends on graph structure and hardware.
-A sparse two-hop similarity matrix can still become dense for some graphs.
-
-Use the default `backend='torch'` for CUDA; the Numba backend is CPU-only.
-`seed` seeds Torch initialization/sampling and the fast backend's local NumPy RNG.
-The two backends have equivalent sampling probabilities but different random
-streams, so their embeddings are not identical for the same seed.
-
-Within `train_gnn`, normalization is cached for its fixed graph. Set
-`cache_graph=False` to disable this. Standalone `FeatureAwareRGNN` instances remain
-uncached by default, so reusing them with different graphs is safe.
-
-## Optional trajectory readout
-
-`pool_trajectories` keeps ordinary mean pooling as its default. Ordered pooling
-is an opt-in representation extension, not a change to the GNN architecture:
-
-```python
-from rankwalk import pool_trajectories
-
-mean_emb, subject_order = pool_trajectories(
-    emb, node_subject_ids, return_subject_ids=True
-)
-
-ordered_emb, subject_order = pool_trajectories(
-    emb, node_subject_ids, node_times,
-    mode='ordered',
-    n_timepoints=4,
-    raw_trajectories=raw_sequences,  # optional: (subjects, 16, variables)
-    return_subject_ids=True,
-)
-```
-
-For the default ordered grid, normalize `node_times` to the common observation
-window `[0, 1]`. For physical units, provide an explicit increasing grid, e.g.
-`time_grid=[0., 0.5, 1., 2.]`. Interpolation uses constant endpoint extrapolation;
-for duplicate times the last node in input order is used. Single-node subjects
-are supported. Outputs retain the embedding tensor's device and dtype.
-
-Raw sequences must be finite, prepared/scaled appropriately for your evaluation,
-and ordered by the returned sorted subject IDs. This helper does not fit a
-scaler or interpolate raw data. Do not include post-landmark observations when
-predicting future outcomes; fit preprocessing on training data for inductive
-validation.
-
-The ordered representation concatenates separately L2-normalized blocks: mean
-embedding, four time-ordered embeddings, and optional flattened raw sequences.
-For 48-dimensional node embeddings, four grid points and 16 raw observations of
-four variables, it has **304 dimensions**, compared with 48 for mean pooling.
-It is not universally more accurate; evaluate this option on your own task.
-
-## Regression tests
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-The suite checks repeated visits, one-variable temporal graphs, dense/sparse
-Jaccard agreement, loss/gradient equivalence, directed/multiedge fast sampling,
-training API and seed compatibility, cache isolation, and trajectory readouts.
-Numba and CUDA checks are skipped when their optional prerequisites are absent.
+The original implementation README remains available as [README_IMPLEMENTATION.md](README_IMPLEMENTATION.md).

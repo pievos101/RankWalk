@@ -1,0 +1,2 @@
+"scenario","replicate","method","seed","ARI","seconds"
+"S1_noisy",2,"fPCA",10002,1,0.0650000000000546

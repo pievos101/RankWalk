@@ -1,0 +1,15 @@
+{
+  "scenario": "S1_subject_curve",
+  "replicate": 15,
+  "method": "RankWalk",
+  "seed": 10015,
+  "ARI": 0.820887685183487,
+  "seconds": 26.48175731900119,
+  "graph_seconds": 0.35545209599877126,
+  "training_seconds": 25.49213969700213,
+  "subjects": 200,
+  "nodes": 2000,
+  "readout": "repository-flatten",
+  "backend": "numba",
+  "epochs": 100
+}

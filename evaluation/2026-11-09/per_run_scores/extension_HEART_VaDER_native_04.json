@@ -1,0 +1,22 @@
+{
+  "cohort": "HEART",
+  "method": "VaDER_native",
+  "replicate": 4,
+  "seed": 30004,
+  "subjects": 256,
+  "seconds": 56.15666348100058,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "native Gaussian mixture labels, no KMeans",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 2,
+      "n": 256,
+      "events": 54,
+      "C_index": 0.5,
+      "logrank_chisq": NaN,
+      "observed_clusters": 1,
+      "min_cluster": 256
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "cohort": "PBC2",
+  "method": "ValueSummary",
+  "replicate": 9,
+  "seed": 30009,
+  "subjects": 312,
+  "seconds": 2.876594303001184,
+  "scope": "descriptive follow-up association control; not held-out prediction",
+  "readout": "standardized features, KMeans100",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 312,
+      "events": 140,
+      "C_index": 0.728586816776121,
+      "logrank_chisq": 111.865824465201,
+      "observed_clusters": 3,
+      "min_cluster": 62
+    },
+    {
+      "k": 4,
+      "n": 312,
+      "events": 140,
+      "C_index": 0.764029326939782,
+      "logrank_chisq": 149.461402580594,
+      "observed_clusters": 4,
+      "min_cluster": 58
+    }
+  ]
+}

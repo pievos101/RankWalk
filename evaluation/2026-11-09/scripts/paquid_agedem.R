@@ -1,0 +1,6 @@
+root<-'/workspace/rankwalk-paper-reproduction';library(survival);library(Hmisc);load('/workspace/RankWalk/experiments/paquid.rda')
+for(i in 1:30){file<-file.path(root,'results',sprintf('clinical_PAQUID_%02d.rds',i));out<-file.path(root,'results',sprintf('agedem_PAQUID_%02d.csv',i));if(!file.exists(file)||file.exists(out))next
+ x<-readRDS(file);d<-paquid[paquid$ID%in%x$survival$ID,];s<-do.call(rbind,lapply(split(d,d$ID),function(z)data.frame(id=unique(z$ID),time=unique(z$agedem)[1]-min(z$age,na.rm=TRUE),event=unique(z$dem)[1])));s<-s[complete.cases(s)&s$time>0,];res<-list()
+ for(method in c('FPCA','RankWalk'))for(k in c(3,4)){features<-x[[method]];features<-scale(features);features[!is.finite(features)]<-0;set.seed(20000+i);cl<-kmeans(features,k,nstart=100)$cluster;z<-merge(s,data.frame(id=as.numeric(rownames(features)),cluster=cl),by='id');risk<-tapply(z$time,z$cluster,mean);mapping<-setNames(seq_along(risk),order(risk));score<-as.numeric(mapping[as.character(z$cluster)]);res[[paste(method,k)]]<-data.frame(cohort='PAQUID',replicate=i,method=method,k=k,n=nrow(z),events=sum(z$event),C_index=as.numeric(rcorr.cens(score,Surv(z$time,z$event))['C Index']),logrank_chisq=survdiff(Surv(time,event)~factor(cluster),data=z)$chisq)}
+ write.csv(do.call(rbind,res),out,row.names=FALSE)
+}

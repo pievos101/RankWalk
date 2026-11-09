@@ -1,0 +1,30 @@
+{
+  "cohort": "PAQUID",
+  "method": "TimeOnly",
+  "replicate": 4,
+  "seed": 30004,
+  "subjects": 288,
+  "seconds": 5.66504673399686,
+  "scope": "descriptive follow-up association control; not held-out prediction",
+  "readout": "standardized features, KMeans100",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 288,
+      "events": 103,
+      "C_index": 0.681828703703704,
+      "logrank_chisq": 46.8349297878734,
+      "observed_clusters": 3,
+      "min_cluster": 73
+    },
+    {
+      "k": 4,
+      "n": 288,
+      "events": 103,
+      "C_index": 0.683101851851852,
+      "logrank_chisq": 54.4211578461828,
+      "observed_clusters": 4,
+      "min_cluster": 64
+    }
+  ]
+}

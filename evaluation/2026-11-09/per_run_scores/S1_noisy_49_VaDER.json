@@ -1,0 +1,13 @@
+{
+  "scenario": "S1_noisy",
+  "replicate": 49,
+  "seed": 10049,
+  "method": "VaDER",
+  "ARI": 0.36115140940301055,
+  "seconds": 15.407543363999139,
+  "pretrain_epochs": 50,
+  "train_epochs": 100,
+  "implementation": "official TensorFlow VaDER",
+  "readout": "native mixture",
+  "normalization": "repository R scale, across subjects separately per time and marker"
+}

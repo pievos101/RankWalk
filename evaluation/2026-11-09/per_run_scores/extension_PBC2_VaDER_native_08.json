@@ -1,0 +1,22 @@
+{
+  "cohort": "PBC2",
+  "method": "VaDER_native",
+  "replicate": 8,
+  "seed": 30008,
+  "subjects": 312,
+  "seconds": 33.18644552399928,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "native Gaussian mixture labels, no KMeans",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 312,
+      "events": 140,
+      "C_index": 0.675735779561486,
+      "logrank_chisq": 126.220043478919,
+      "observed_clusters": 3,
+      "min_cluster": 22
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "cohort": "PBC2",
+  "method": "RankWalk",
+  "replicate": 9,
+  "seed": 30009,
+  "subjects": 312,
+  "seconds": 21.04064405799727,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 312,
+      "events": 140,
+      "C_index": 0.786250390910039,
+      "logrank_chisq": 242.189537650512,
+      "observed_clusters": 3,
+      "min_cluster": 68
+    },
+    {
+      "k": 4,
+      "n": 312,
+      "events": 140,
+      "C_index": 0.81776642690851,
+      "logrank_chisq": 240.35061379495,
+      "observed_clusters": 4,
+      "min_cluster": 58
+    }
+  ]
+}

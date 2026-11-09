@@ -1,0 +1,31 @@
+{
+  "cohort": "AIDS",
+  "method": "TimesURL",
+  "replicate": 10,
+  "seed": 30010,
+  "subjects": 467,
+  "seconds": 54.96761754899853,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 467,
+      "events": 188,
+      "C_index": 0.63370982156615,
+      "logrank_chisq": 49.6903675367935,
+      "observed_clusters": 3,
+      "min_cluster": 69
+    },
+    {
+      "k": 4,
+      "n": 467,
+      "events": 188,
+      "C_index": 0.652955406946285,
+      "logrank_chisq": 58.3761328321545,
+      "observed_clusters": 4,
+      "min_cluster": 46
+    }
+  ]
+}

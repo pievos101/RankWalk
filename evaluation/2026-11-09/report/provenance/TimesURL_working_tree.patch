@@ -1,0 +1,22 @@
+diff --git a/src/timesurl.py b/src/timesurl.py
+index 217b49b..769c646 100644
+--- a/src/timesurl.py
++++ b/src/timesurl.py
+@@ -20,7 +20,7 @@ def tp_noneffect(func, x, **kwargs):
+ def freq_mix(x, rate=0.5, dim=1):
+     x_f = torch.fft.fft(x, dim=dim)
+ 
+-    m = torch.cuda.FloatTensor(x_f.shape).uniform_() < rate
++    m = torch.rand(x_f.shape, device=x_f.device) < rate
+     amp = abs(x_f)
+     _, index = amp.sort(dim=dim, descending=True)
+     dominant_mask = index > 2
+@@ -49,7 +49,7 @@ def freq_mix(x, rate=0.5, dim=1):
+ def freq_dropout(x, dropout_rate=0.5):
+     x_aug = x.clone()
+     x_aug_f = torch.fft.fft(x_aug)
+-    m = torch.cuda.FloatTensor(x_aug_f.shape).uniform_() < dropout_rate
++    m = torch.rand(x_aug_f.shape, device=x_aug_f.device) < dropout_rate
+     amp = torch.abs(x_aug_f)
+     _, index = amp.sort(dim=1, descending=True)
+     dominant_mask = index > 5

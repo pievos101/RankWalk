@@ -1,0 +1,31 @@
+{
+  "cohort": "AIDS",
+  "method": "VaDER",
+  "replicate": 10,
+  "seed": 30010,
+  "subjects": 467,
+  "seconds": 34.50165879999986,
+  "scope": "extension, common observed cohort, full-follow-up descriptive association",
+  "readout": "standardized embedding + KMeans100, source K and K4 sensitivity",
+  "preprocessing": "observed graph for RankWalk; native sparse PACE for FPCA; absolute-time 32-grid interpolation plus global marker standardization for encoders",
+  "metrics": [
+    {
+      "k": 3,
+      "n": 467,
+      "events": 188,
+      "C_index": 0.605827606397732,
+      "logrank_chisq": 46.035843057993,
+      "observed_clusters": 3,
+      "min_cluster": 41
+    },
+    {
+      "k": 4,
+      "n": 467,
+      "events": 188,
+      "C_index": 0.604826034700607,
+      "logrank_chisq": 44.8441787544643,
+      "observed_clusters": 4,
+      "min_cluster": 20
+    }
+  ]
+}

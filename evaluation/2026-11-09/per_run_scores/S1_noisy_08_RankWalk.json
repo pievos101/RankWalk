@@ -1,0 +1,15 @@
+{
+  "scenario": "S1_noisy",
+  "replicate": 8,
+  "method": "RankWalk",
+  "seed": 10008,
+  "ARI": 0.986598879940902,
+  "seconds": 115.46281901000111,
+  "graph_seconds": 0.5812612230001832,
+  "training_seconds": 114.1103489470006,
+  "subjects": 200,
+  "nodes": 2000,
+  "readout": "repository-flatten",
+  "backend": "numba",
+  "epochs": 100
+}

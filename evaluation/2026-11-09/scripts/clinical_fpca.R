@@ -1,0 +1,3 @@
+a<-commandArgs(TRUE);library(fdapace);d<-read.csv(a[1]);ids<-sort(unique(d$subject));features<-list()
+for(marker in sort(unique(d$outcome))){z<-d[d$outcome==marker & is.finite(d$y)&is.finite(d$time),];Ly<-split(z$y,z$subject);Lt<-split(z$time,z$subject);fp<-FPCA(Ly=Ly,Lt=Lt,optns=list(dataType='Sparse'));sc<-fp$xiEst;if(is.null(dim(sc))) sc<-matrix(sc,ncol=1);rownames(sc)<-names(Ly);x<-matrix(0,nrow=length(ids),ncol=ncol(sc));ix<-match(ids,as.numeric(rownames(sc)));ok<-!is.na(ix);x[ok,]<-sc[ix[ok],,drop=FALSE];features[[as.character(marker)]]<-x}
+x<-do.call(cbind,features);x[!is.finite(x)]<-0;write.csv(data.frame(subject=ids,x),a[2],row.names=FALSE)
