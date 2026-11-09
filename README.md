@@ -347,3 +347,96 @@ If you find {RankWalk} useful please cite [the paper](https://arxiv.org/abs/2607
 }
 
 ```
+
+## Optional CPU acceleration
+
+The existing `train_gnn(x, edge_index, edge_type, J, ...)` call still uses the
+Torch backend and returns a detached Torch tensor on the requested device.
+The walk sampler now tracks integer node IDs correctly, so repeated visits no
+longer create duplicate positive pairs. This correctness fix changes training
+pairs relative to earlier versions.
+
+For compiled CPU sampling and sparse Jaccard storage, install the optional extra:
+
+```bash
+pip install -e '.[fast]'
+```
+
+```python
+from rankwalk import compute_jaccard_sparse, train_gnn
+
+# SciPy CSR matrix on the CPU; avoids materializing a dense N-by-N tensor.
+J_sparse = compute_jaccard_sparse(edge_index, x.size(0))
+emb = train_gnn(
+    x, edge_index, None, J_sparse,
+    epochs=80,
+    backend='numba',
+    device='cpu',
+    seed=42,
+)
+```
+
+The fast backend also accepts dense Torch similarities. It follows the supplied
+edge directions and preserves the sampling mass of duplicate edges. As before,
+Jaccard itself describes undirected neighbor sets. Compilation adds overhead to
+the first fast call; performance depends on graph structure and hardware.
+A sparse two-hop similarity matrix can still become dense for some graphs.
+
+Use the default `backend='torch'` for CUDA; the Numba backend is CPU-only.
+`seed` seeds Torch initialization/sampling and the fast backend's local NumPy RNG.
+The two backends have equivalent sampling probabilities but different random
+streams, so their embeddings are not identical for the same seed.
+
+Within `train_gnn`, normalization is cached for its fixed graph. Set
+`cache_graph=False` to disable this. Standalone `FeatureAwareRGNN` instances remain
+uncached by default, so reusing them with different graphs is safe.
+
+## Optional trajectory readout
+
+`pool_trajectories` keeps ordinary mean pooling as its default. Ordered pooling
+is an opt-in representation extension, not a change to the GNN architecture:
+
+```python
+from rankwalk import pool_trajectories
+
+mean_emb, subject_order = pool_trajectories(
+    emb, node_subject_ids, return_subject_ids=True
+)
+
+ordered_emb, subject_order = pool_trajectories(
+    emb, node_subject_ids, node_times,
+    mode='ordered',
+    n_timepoints=4,
+    raw_trajectories=raw_sequences,  # optional: (subjects, 16, variables)
+    return_subject_ids=True,
+)
+```
+
+For the default ordered grid, normalize `node_times` to the common observation
+window `[0, 1]`. For physical units, provide an explicit increasing grid, e.g.
+`time_grid=[0., 0.5, 1., 2.]`. Interpolation uses constant endpoint extrapolation;
+for duplicate times the last node in input order is used. Single-node subjects
+are supported. Outputs retain the embedding tensor's device and dtype.
+
+Raw sequences must be finite, prepared/scaled appropriately for your evaluation,
+and ordered by the returned sorted subject IDs. This helper does not fit a
+scaler or interpolate raw data. Do not include post-landmark observations when
+predicting future outcomes; fit preprocessing on training data for inductive
+validation.
+
+The ordered representation concatenates separately L2-normalized blocks: mean
+embedding, four time-ordered embeddings, and optional flattened raw sequences.
+For 48-dimensional node embeddings, four grid points and 16 raw observations of
+four variables, it has **304 dimensions**, compared with 48 for mean pooling.
+It is not universally more accurate; evaluate this option on your own task.
+
+## Regression tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The suite checks repeated visits, one-variable temporal graphs, dense/sparse
+Jaccard agreement, loss/gradient equivalence, directed/multiedge fast sampling,
+training API and seed compatibility, cache isolation, and trajectory readouts.
+Numba and CUDA checks are skipped when their optional prerequisites are absent.

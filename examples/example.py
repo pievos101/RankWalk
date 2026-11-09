@@ -56,7 +56,7 @@ lr = 1e-3
 emb_gnn = train_gnn(
     x,
     edge_index,
-    J,
+    None, J,
     epochs=epochs,
     lr=lr,
     walk_length=walk_length,

@@ -1,10 +1,12 @@
 import torch
 
 def sample_pos_pairs_start_anchor(J, edge_index, num_nodes, walk_length=10, top_k=5, eps=1e-6):
+    if walk_length < 0 or top_k < 1:
+        raise ValueError('walk_length must be non-negative and top_k at least 1')
     neighbors_list = [[] for _ in range(num_nodes)]
     for u, v in edge_index.t().tolist():
         neighbors_list[u].append(v)
-    neighbors_tensor = [torch.tensor(neigh, dtype=torch.long) for neigh in neighbors_list]
+    neighbors_tensor = [torch.tensor(neigh, dtype=torch.long, device=J.device) for neigh in neighbors_list]
 
     pos_pairs = []
 
@@ -18,7 +20,8 @@ def sample_pos_pairs_start_anchor(J, edge_index, num_nodes, walk_length=10, top_
                 break
             probs = J[start, nbrs] + eps
             probs /= probs.sum()
-            cur = nbrs[torch.multinomial(probs, 1).item()]
+            # Store node IDs as integers so revisits are deduplicated.
+            cur = nbrs[torch.multinomial(probs, 1).item()].item()
             if cur not in visited:
                 visited[cur] = step + 1
 
@@ -33,29 +36,33 @@ def sample_pos_pairs_start_anchor(J, edge_index, num_nodes, walk_length=10, top_
 
     return pos_pairs
 
+def _weighted_loss(emb, pos_i, pos_j, weights, temperature=0.5, neg_multiplier=20):
+    """Array-based version of the original weighted sampled InfoNCE objective."""
+    if temperature <= 0 or neg_multiplier < 0:
+        raise ValueError('temperature must be positive and neg_multiplier non-negative')
+    if pos_i.numel() == 0:
+        return emb.sum() * 0.0
+    weights = weights.to(device=emb.device, dtype=emb.dtype).clamp_min(0.05)
+    positive = (emb[pos_i] * emb[pos_j]).sum(dim=1) / temperature
+    negatives = torch.randint(0, emb.size(0), (len(pos_i), neg_multiplier), device=emb.device)
+    negative = (emb[pos_i].unsqueeze(1) * emb[negatives]).sum(dim=2) / temperature
+    # Include the original 1e-8 denominator term, using logsumexp for stability.
+    epsilon = positive.new_full((len(pos_i), 1), -18.420680743952367)
+    denominator = torch.logsumexp(torch.cat((positive[:, None], negative, epsilon), dim=1), dim=1)
+    return -(weights * (positive - denominator)).mean()
+
+
 def contrastive_loss_weighted_fixed(emb, pos_pairs, temperature=0.5, neg_multiplier=20):
-    device = emb.device
     if len(pos_pairs) == 0:
-        return torch.tensor(0.0, device=device)
+        return _weighted_loss(emb, torch.empty(0, dtype=torch.long, device=emb.device),
+                              torch.empty(0, dtype=torch.long, device=emb.device),
+                              emb.new_empty(0), temperature, neg_multiplier)
+    pos_i = torch.tensor([p[0] for p in pos_pairs], device=emb.device, dtype=torch.long)
+    pos_j = torch.tensor([p[1] for p in pos_pairs], device=emb.device, dtype=torch.long)
+    weights = torch.tensor([p[2] for p in pos_pairs], device=emb.device, dtype=emb.dtype)
+    return _weighted_loss(emb, pos_i, pos_j, weights, temperature, neg_multiplier)
 
-    pos_i = torch.tensor([p[0] for p in pos_pairs], device=device)
-    pos_j = torch.tensor([p[1] for p in pos_pairs], device=device)
-    weights = torch.tensor([max(p[2], 0.05) for p in pos_pairs], device=device)
 
-    pos_sim = (emb[pos_i] * emb[pos_j]).sum(dim=1) / temperature
-    pos_exp = torch.exp(pos_sim)
-
-    num_nodes = emb.size(0)
-    neg_idx = torch.randint(0, num_nodes, (len(pos_i), neg_multiplier), device=device)
-    neg_emb = emb[neg_idx]
-    pi_emb = emb[pos_i].unsqueeze(1)
-    neg_sim = (pi_emb * neg_emb).sum(dim=2) / temperature
-    neg_exp_sum = torch.exp(neg_sim).sum(dim=1)
-
-    denom = pos_exp + neg_exp_sum + 1e-8
-    loss = -(weights * torch.log(pos_exp / denom)).mean()
-    return loss
-    
 ########### - SOME EXPERIMENTS ####################################
 # -------------------------------------------------
 # POSITIVE HELPERS (unchanged usage)

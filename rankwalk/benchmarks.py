@@ -78,7 +78,7 @@ def sbm_pout_sweep(p_out_values=None, n_repeats=5):
             x = torch.randn(G.number_of_nodes(), 20)
             J = compute_jaccard_fast(edge_index, G.number_of_nodes())
 
-            emb_gnn = train_gnn(x, edge_index, J, epochs=100, walk_length=15, top_k=10)
+            emb_gnn = train_gnn(x, edge_index, None, J, epochs=100, walk_length=15, top_k=10)
             ari_gnn, _ = evaluate(emb_gnn, labels)
             ari_gnn_list.append(ari_gnn)
 

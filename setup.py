@@ -6,10 +6,14 @@ setup(
     description='Start-node anchored random walk GNN package',
     packages=find_packages(),
     install_requires=[
+        'numpy',
+        'scipy',
+        'pandas',
         'torch',
         'torch_geometric',
         'networkx',
         'scikit-learn',
         'node2vec',
     ],
+    extras_require={'fast': ['numba>=0.57']},
 )

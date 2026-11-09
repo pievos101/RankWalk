@@ -16,10 +16,12 @@ def _robust_distance_matrix(
 ):
 
     n, p = X.shape
+    if p == 0:
+        raise ValueError("X must contain at least one feature")
 
-    subspace_size = max(
-        2,
-        int(np.floor(subspace_ratio * p))
+    subspace_size = min(
+        p,
+        max(2, int(np.floor(subspace_ratio * p)))
     )
 
     dist_accum = np.zeros((n, n), dtype=np.float32)
@@ -758,10 +760,12 @@ def _final_robust_distance_matrix(
 ):
 
     n, p = X.shape
+    if p == 0:
+        raise ValueError("X must contain at least one feature")
 
-    subspace_size = max(
-        2,
-        int(np.floor(subspace_ratio * p))
+    subspace_size = min(
+        p,
+        max(2, int(np.floor(subspace_ratio * p)))
     )
 
     dist_accum = np.zeros((n, n), dtype=np.float32)

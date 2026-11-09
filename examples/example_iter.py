@@ -82,7 +82,7 @@ for i in range(n_iter):
 
     # Train StartAnchor GNN
     emb_gnn = train_gnn(
-        x, edge_index, J,
+        x, edge_index, None, J,
         epochs=epochs,
         lr=lr,
         walk_length=walk_length,
